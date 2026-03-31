@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ToolFace — LLM Tool Registry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f;
+  --surface: #111118;
+  --surface2: #1a1a24;
+  --border: rgba(255,255,255,0.07);
+  --border-hover: rgba(255,255,255,0.15);
+  --text: #e8e8f0;
+  --muted: #6b6b80;
+  --accent: #7c6aff;
+  --accent2: #3ecfb2;
+  --accent3: #ff6b6b;
+  --tag-bg: rgba(124,106,255,0.12);
+  --tag-text: #a594ff;
+  --mono: 'Space Mono', monospace;
+  --sans: 'DM Sans', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ── Grid noise texture ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Ambient glow ── */
+body::after {
+  content: '';
+  position: fixed;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 800px;
+  height: 400px;
+  background: radial-gradient(ellipse, rgba(124,106,255,0.08) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Nav ── */
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid var(--border);
+  background: rgba(10,10,15,0.85);
+  backdrop-filter: blur(16px);
+  padding: 0 32px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nav-logo {
+  font-family: var(--mono);
+  font-size: 15px;
+  color: var(--text);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-logo .logo-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.nav-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 1px solid rgba(124,106,255,0.3);
+  color: var(--tag-text);
+  background: var(--tag-bg);
+}
+
+.nav-right { display: flex; align-items: center; gap: 16px; }
+
+.nav-link {
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.nav-link:hover { color: var(--text); }
+
+/* ── Hero ── */
+.hero {
+  position: relative;
+  z-index: 1;
+  padding: 72px 32px 56px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.hero-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent2);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hero-eyebrow::before {
+  content: '';
+  width: 24px; height: 1px;
+  background: var(--accent2);
+}
+
+.hero h1 {
+  font-family: var(--mono);
+  font-size: clamp(32px, 5vw, 52px);
+  font-weight: 700;
+  line-height: 1.1;
+  margin-bottom: 20px;
+  color: var(--text);
+}
+
+.hero h1 span {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-sub {
+  font-size: 16px;
+  color: var(--muted);
+  max-width: 520px;
+  line-height: 1.7;
+  margin-bottom: 36px;
+}
+
+.hero-stats {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat-n {
+  font-family: var(--mono);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+.stat-n span { color: var(--accent); }
+.stat-l {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ── Search + filter bar ── */
+.toolbar {
+  position: relative;
+  z-index: 1;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 32px 28px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 240px;
+}
+
+.search-wrap svg {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+input[type="search"] {
+  width: 100%;
+  padding: 10px 14px 10px 40px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+input[type="search"]:focus { border-color: var(--accent); }
+input[type="search"]::placeholder { color: var(--muted); }
+
+.filter-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  background: var(--surface);
+  transition: all 0.15s;
+  font-family: var(--sans);
+}
+.pill:hover { border-color: var(--border-hover); color: var(--text); }
+.pill.active {
+  background: var(--tag-bg);
+  border-color: rgba(124,106,255,0.4);
+  color: var(--tag-text);
+}
+
+/* ── Main grid ── */
+main {
+  position: relative;
+  z-index: 1;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 32px 80px;
+}
+
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.tool-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.15s, background 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.tool-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(124,106,255,0.3), transparent);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.tool-card:hover {
+  border-color: var(--border-hover);
+  background: var(--surface2);
+  transform: translateY(-2px);
+}
+
+.tool-card:hover::before { opacity: 1; }
+
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.card-icon {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.card-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.card-badge {
+  font-family: var(--mono);
+  font-size: 9px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.badge-free { background: rgba(62,207,178,0.12); color: #3ecfb2; }
+.badge-get  { background: rgba(124,106,255,0.12); color: #a594ff; }
+.badge-post { background: rgba(255,107,107,0.12); color: #ff8c8c; }
+
+.card-name {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+
+.card-desc {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.55;
+  margin-bottom: 14px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.05);
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+/* ── Category headers ── */
+.category-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 36px 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.category-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.category-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--surface2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+/* ── Modal ── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.overlay.open { display: flex; }
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border-hover);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 720px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: modal-in 0.2s ease;
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.modal-name {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.modal-desc {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.55;
+  max-width: 500px;
+}
+
+.close-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  width: 32px; height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.close-btn:hover { border-color: var(--border-hover); color: var(--text); }
+
+.modal-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+}
+
+.tab-btn {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.modal-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 20px 24px;
+}
+
+/* Schema blocks */
+.schema-section { margin-bottom: 20px; }
+
+.schema-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.schema-format-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.fmt-btn {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.fmt-btn:hover { border-color: var(--border-hover); color: var(--text); }
+.fmt-btn.active {
+  background: var(--tag-bg);
+  border-color: rgba(124,106,255,0.4);
+  color: var(--tag-text);
+}
+
+.code-block {
+  position: relative;
+  background: #080810;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: #c8c8e0;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.copy-btn {
+  position: absolute;
+  top: 10px; right: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+.copy-btn.copied { color: var(--accent2); border-color: var(--accent2); }
+
+/* JSON syntax coloring */
+.j-key   { color: #a594ff; }
+.j-str   { color: #3ecfb2; }
+.j-num   { color: #ff8c8c; }
+.j-bool  { color: #ffb347; }
+.j-null  { color: var(--muted); }
+.j-punct { color: #6b6b80; }
+
+/* Params table */
+.params-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.params-table th {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  text-align: left;
+  padding: 6px 12px 8px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 400;
+}
+
+.params-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  vertical-align: top;
+}
+
+.param-name { font-family: var(--mono); color: #a594ff; font-size: 12px; }
+.param-type { font-family: var(--mono); color: #ffb347; font-size: 11px; }
+.param-req  { font-size: 10px; }
+.param-desc { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.req-yes    { color: #ff8c8c; font-family: var(--mono); font-size: 10px; }
+.req-no     { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+
+/* Endpoint row */
+.endpoint-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #080810;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+.method-pill {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+.method-get  { background: rgba(62,207,178,0.15); color: #3ecfb2; }
+.method-post { background: rgba(255,107,107,0.15); color: #ff8c8c; }
+.endpoint-url { color: #c8c8e0; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* footer */
+footer {
+  position: relative;
+  z-index: 1;
+  border-top: 1px solid var(--border);
+  padding: 24px 32px;
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.footer-logo { font-family: var(--mono); color: var(--text); }
+
+/* empty state */
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.empty-icon { font-size: 32px; margin-bottom: 12px; }
+
+/* scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="#" class="nav-logo">
+    <span class="logo-dot"></span>
+    ToolFace
+  </a>
+  <div class="nav-right">
+    <span class="nav-badge">v1.0 · 15 tools</span>
+    <a href="https://docs.google.com/document/d/1wBMkT0c5cV4zHku555tyO_2y_1fgy_ncuqI9sRGKahA/edit?pli=1&tab=t.0" class="nav-link" target="_blank" rel="noopener">Docs</a>
+    <a href="#" class="nav-link">GitHub</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-eyebrow">LLM Tool Registry</div>
+  <h1>Discover & Deploy<br><span>LLM-Ready Tools</span></h1>
+  <p class="hero-sub">A centralized registry of standardized API schemas for LLM tool use. Copy schemas, call real APIs, benchmark models.</p>
+  <div class="hero-stats">
+    <div class="stat">
+      <span class="stat-n">15<span>/15</span></span>
+      <span class="stat-l">Tools verified</span>
+    </div>
+    <div class="stat">
+      <span class="stat-n">22<span>/22</span></span>
+      <span class="stat-l">Benchmark score</span>
+    </div>
+    <div class="stat">
+      <span class="stat-n">100<span>%</span></span>
+      <span class="stat-l">Selection accuracy</span>
+    </div>
+    <div class="stat">
+      <span class="stat-n">2</span>
+      <span class="stat-l">LLM formats</span>
+    </div>
+  </div>
+</section>
+
+<div class="toolbar">
+  <div class="search-wrap">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+    </svg>
+    <input type="search" id="searchInput" placeholder="Search tools..." autocomplete="off">
+  </div>
+  <div class="filter-pills" id="filterPills">
+    <button class="pill active" data-cat="all">All</button>
+    <button class="pill" data-cat="Finance">Finance</button>
+    <button class="pill" data-cat="Social">Social</button>
+    <button class="pill" data-cat="News">News</button>
+    <button class="pill" data-cat="Jobs">Jobs</button>
+    <button class="pill" data-cat="Sports">Sports</button>
+    <button class="pill" data-cat="E-commerce">E-commerce</button>
+    <button class="pill" data-cat="People">People</button>
+    <button class="pill" data-cat="Entertainment">Entertainment</button>
+  </div>
+</div>
+
+<main>
+  <div class="tools-grid" id="toolsGrid"></div>
+  <div class="empty" id="emptyState" style="display:none">
+    <div class="empty-icon">⌀</div>
+    No tools match your search.
+  </div>
+</main>
+
+<footer>
+  <span class="footer-logo">ToolFace</span>
+  <span>Open-source · Research Q1 validated · claude-sonnet-4-6</span>
+</footer>
+
+<!-- Modal -->
+<div class="overlay" id="overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title-row">
+          <span id="modalIcon" style="font-size:20px"></span>
+          <span class="modal-name" id="modalName"></span>
+          <span class="card-badge" id="modalMethod"></span>
+        </div>
+        <div class="modal-desc" id="modalDesc"></div>
+      </div>
+      <button class="close-btn" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-tabs">
+      <button class="tab-btn active" onclick="switchTab('schema', this)">Schema</button>
+      <button class="tab-btn" onclick="switchTab('params', this)">Parameters</button>
+      <button class="tab-btn" onclick="switchTab('endpoint', this)">Endpoint</button>
+    </div>
+    <div class="modal-body">
+      <!-- Schema tab -->
+      <div class="tab-panel active" id="tab-schema">
+        <div class="schema-section">
+          <div class="schema-label">Format</div>
+          <div class="schema-format-tabs">
+            <button class="fmt-btn active" onclick="switchFormat('anthropic', this)">Anthropic</button>
+            <button class="fmt-btn" onclick="switchFormat('openai', this)">OpenAI</button>
+          </div>
+          <div style="position:relative">
+            <div class="code-block" id="schemaCode"></div>
+            <button class="copy-btn" onclick="copySchema()">copy</button>
+          </div>
+        </div>
+      </div>
+      <!-- Params tab -->
+      <div class="tab-panel" id="tab-params">
+        <table class="params-table" id="paramsTable">
+          <thead><tr>
+            <th>Name</th><th>Type</th><th>Required</th><th>Description</th>
+          </tr></thead>
+          <tbody id="paramsBody"></tbody>
+        </table>
+      </div>
+      <!-- Endpoint tab -->
+      <div class="tab-panel" id="tab-endpoint">
+        <div class="schema-section">
+          <div class="schema-label">API Endpoint</div>
+          <div class="endpoint-row" id="endpointRow"></div>
+          <div class="schema-label" style="margin-top:16px">Host</div>
+          <div class="code-block" id="hostBlock" style="padding:10px 16px"></div>
+          <div class="schema-label" style="margin-top:16px">Example cURL</div>
+          <div style="position:relative">
+            <div class="code-block" id="curlBlock"></div>
+            <button class="copy-btn" onclick="copyCurl()">copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOOLS = [
+  // ── Finance ────────────────────────────────────────────────
+  {
+    id: "yahoo_finance_news",
+    name: "yahoo_finance_news",
+    icon: "📰",
+    category: "Finance",
+    desc: "Get latest market news for one or more stock tickers. Use when asked about headlines or recent events related to a company.",
+    method: "GET",
+    plan: "Free",
+    host: "yahoo-finance15.p.rapidapi.com",
+    endpoint: "/api/v1/markets/news",
+    tags: ["finance","news","stocks"],
+    params: [
+      { name: "ticker", type: "string", required: true, desc: "Ticker symbols comma-separated. e.g. 'AAPL' or 'AAPL,TSLA'" }
+    ]
+  },
+  {
+    id: "yahoo_finance_quote",
+    name: "yahoo_finance_quote",
+    icon: "📈",
+    category: "Finance",
+    desc: "Get real-time stock price, change percentage, and volume. Use when asked about current price or how a stock is doing today.",
+    method: "GET",
+    plan: "Free",
+    host: "yahoo-finance15.p.rapidapi.com",
+    endpoint: "/api/v1/markets/quote",
+    tags: ["finance","stocks","price"],
+    params: [
+      { name: "ticker", type: "string", required: true, desc: "Stock ticker symbol. e.g. 'NVDA', 'AAPL'" },
+      { name: "type", type: "enum", required: false, desc: "Asset type: STOCKS | ETF | CRYPTO. Default: STOCKS" }
+    ]
+  },
+  // ── News ───────────────────────────────────────────────────
+  {
+    id: "realtime_news_search",
+    name: "realtime_news_search",
+    icon: "🗞️",
+    category: "News",
+    desc: "Search the latest news articles on any topic from global sources. Use for current events or recent headlines not related to stocks.",
+    method: "GET",
+    plan: "Free",
+    host: "real-time-news-data.p.rapidapi.com",
+    endpoint: "/search",
+    tags: ["news","media","search"],
+    params: [
+      { name: "query", type: "string", required: true, desc: "News search query. e.g. 'climate change'" },
+      { name: "country", type: "string", required: false, desc: "Country code: US, GB, etc. Default: US" },
+      { name: "lang", type: "string", required: false, desc: "Language: en, zh, es, etc. Default: en" },
+      { name: "limit", type: "integer", required: false, desc: "Number of results, max 100. Default: 10" },
+      { name: "time_published", type: "enum", required: false, desc: "anytime | 1h | 1d | 7d | 30d. Default: anytime" }
+    ]
+  },
+  // ── Social ─────────────────────────────────────────────────
+  {
+    id: "instagram_posts",
+    name: "instagram_posts",
+    icon: "📸",
+    category: "Social",
+    desc: "Fetch recent posts from an Instagram user profile. Use when asked to see an account's latest content.",
+    method: "POST",
+    plan: "Free",
+    host: "instagram120.p.rapidapi.com",
+    endpoint: "/api/instagram/posts",
+    tags: ["social","instagram","posts"],
+    params: [
+      { name: "username", type: "string", required: true, desc: "Instagram username without @. e.g. 'nasa'" },
+      { name: "maxId", type: "string", required: false, desc: "Pagination cursor. Leave empty for first page." }
+    ]
+  },
+  {
+    id: "tiktok_user_info",
+    name: "tiktok_user_info",
+    icon: "🎵",
+    category: "Social",
+    desc: "Get a TikTok user's profile stats including follower count, total likes, and video count.",
+    method: "GET",
+    plan: "Free",
+    host: "tiktok-scraper7.p.rapidapi.com",
+    endpoint: "/user/info",
+    tags: ["social","tiktok","profile"],
+    params: [
+      { name: "unique_id", type: "string", required: true, desc: "TikTok username without @. e.g. 'charlidamelio'" }
+    ]
+  },
+  {
+    id: "tiktok_user_stories",
+    name: "tiktok_user_stories",
+    icon: "▶️",
+    category: "Social",
+    desc: "Get the latest story videos from a TikTok user by their numeric user ID, with play counts and metadata.",
+    method: "GET",
+    plan: "Free",
+    host: "tiktok-scraper7.p.rapidapi.com",
+    endpoint: "/user/story",
+    tags: ["social","tiktok","video"],
+    params: [
+      { name: "user_id", type: "string", required: true, desc: "TikTok numeric user ID. e.g. '7128593328456041478'" }
+    ]
+  },
+  // ── Jobs ───────────────────────────────────────────────────
+  {
+    id: "job_search",
+    name: "job_search",
+    icon: "💼",
+    category: "Jobs",
+    desc: "Search for job listings by keyword and location. Use when asked about job openings or career opportunities.",
+    method: "GET",
+    plan: "Free",
+    host: "jsearch.p.rapidapi.com",
+    endpoint: "/search",
+    tags: ["jobs","career","hiring"],
+    params: [
+      { name: "query", type: "string", required: true, desc: "Job search terms. e.g. 'Python developer remote'" },
+      { name: "location", type: "string", required: false, desc: "Location filter. e.g. 'New York'" },
+      { name: "date_posted", type: "enum", required: false, desc: "all | today | 3days | week | month" },
+      { name: "employment_type", type: "enum", required: false, desc: "FULLTIME | PARTTIME | CONTRACTOR | INTERN" }
+    ]
+  },
+  // ── E-commerce ─────────────────────────────────────────────
+  {
+    id: "amazon_search",
+    name: "amazon_search",
+    icon: "🛒",
+    category: "E-commerce",
+    desc: "Search Amazon for products and return listings with prices, ratings, and ASINs.",
+    method: "GET",
+    plan: "Free",
+    host: "real-time-amazon-data.p.rapidapi.com",
+    endpoint: "/search",
+    tags: ["ecommerce","amazon","products"],
+    params: [
+      { name: "query", type: "string", required: true, desc: "Product search query. e.g. 'wireless earbuds'" },
+      { name: "country", type: "string", required: false, desc: "Country code. Default: US" },
+      { name: "page", type: "integer", required: false, desc: "Page number. Default: 1" }
+    ]
+  },
+  // ── People ─────────────────────────────────────────────────
+  {
+    id: "skip_tracing_search",
+    name: "skip_tracing_search",
+    icon: "🔍",
+    category: "People",
+    desc: "Search for a person's contact info using name, email, phone, or address.",
+    method: "GET",
+    plan: "Free",
+    host: "skip-tracing-working-api.p.rapidapi.com",
+    endpoint: "/search/{type}",
+    tags: ["people","lookup","contact"],
+    params: [
+      { name: "search_type", type: "enum", required: true, desc: "byname | byemail | byphone | byaddress" },
+      { name: "name", type: "string", required: false, desc: "Full name. e.g. 'John Smith'" },
+      { name: "state", type: "string", required: false, desc: "US state code. e.g. 'CA'" },
+      { name: "email", type: "string", required: false, desc: "Email address" },
+      { name: "phoneno", type: "string", required: false, desc: "Phone number. e.g. '(214)349-3972'" },
+      { name: "street", type: "string", required: false, desc: "Street address" },
+      { name: "citystatezip", type: "string", required: false, desc: "e.g. 'Austin TX 78701'" }
+    ]
+  },
+  // ── Sports ─────────────────────────────────────────────────
+  {
+    id: "cricket_live",
+    name: "cricket_live",
+    icon: "🏏",
+    category: "Sports",
+    desc: "Get live cricket match scores, upcoming fixtures, or recent match results.",
+    method: "GET",
+    plan: "Free",
+    host: "cricbuzz-cricket.p.rapidapi.com",
+    endpoint: "/matches/v1/{match_type}",
+    tags: ["sports","cricket","live"],
+    params: [
+      { name: "match_type", type: "enum", required: true, desc: "live | upcoming | recent" }
+    ]
+  },
+  {
+    id: "sport_player_ratings",
+    name: "sport_player_ratings",
+    icon: "⭐",
+    category: "Sports",
+    desc: "Get season performance ratings for a sports player. NOTE: LeBron James player_id=817181, tournament_id=132 (NBA), season_id=65360.",
+    method: "GET",
+    plan: "Free",
+    host: "sportapi7.p.rapidapi.com",
+    endpoint: "/api/v1/player/{id}/unique-tournament/{tid}/season/{sid}/ratings",
+    tags: ["sports","basketball","ratings"],
+    params: [
+      { name: "player_id", type: "integer", required: true, desc: "Player ID. LeBron James = 817181" },
+      { name: "tournament_id", type: "integer", required: true, desc: "League ID. NBA = 132" },
+      { name: "season_id", type: "integer", required: true, desc: "Season ID. Current NBA = 65360" }
+    ]
+  },
+  {
+    id: "sport_standings",
+    name: "sport_standings",
+    icon: "🏆",
+    category: "Sports",
+    desc: "Get league standings and win/loss records for a sports season.",
+    method: "GET",
+    plan: "Free",
+    host: "sportapi7.p.rapidapi.com",
+    endpoint: "/api/v1/unique-tournament/{tid}/season/{sid}/standings/total",
+    tags: ["sports","standings","league"],
+    params: [
+      { name: "tournament_id", type: "integer", required: true, desc: "League/tournament ID. NBA = 132" },
+      { name: "season_id", type: "integer", required: true, desc: "Season ID. Current NBA = 65360" }
+    ]
+  },
+  {
+    id: "golf_schedule",
+    name: "golf_schedule",
+    icon: "⛳",
+    category: "Sports",
+    desc: "Get PGA Tour or LIV Tour tournament schedule for a given year, with purse and FedEx Cup points.",
+    method: "GET",
+    plan: "Free",
+    host: "live-golf-data.p.rapidapi.com",
+    endpoint: "/schedule",
+    tags: ["sports","golf","pga"],
+    params: [
+      { name: "orgId", type: "enum", required: true, desc: "1 = PGA Tour, 2 = LIV Tour" },
+      { name: "year", type: "string", required: true, desc: "Year. e.g. '2025'" }
+    ]
+  },
+  {
+    id: "golf_players",
+    name: "golf_players",
+    icon: "🏌️",
+    category: "Sports",
+    desc: "Search for professional golf players by last name to retrieve player ID and country.",
+    method: "GET",
+    plan: "Free",
+    host: "live-golf-data.p.rapidapi.com",
+    endpoint: "/players",
+    tags: ["sports","golf","players"],
+    params: [
+      { name: "lastName", type: "string", required: true, desc: "Player last name. e.g. 'Woods'" },
+      { name: "orgId", type: "string", required: false, desc: "1 = PGA Tour, 2 = LIV Tour. Default: 1" }
+    ]
+  },
+  // ── Entertainment ─────────────────────────────────────────
+  {
+    id: "movies_ratings",
+    name: "movies_ratings",
+    icon: "🎬",
+    category: "Entertainment",
+    desc: "Get IMDb ratings, Rotten Tomatoes score, Metacritic score, genre, director and plot for any movie or TV show using its IMDb ID.",
+    method: "GET",
+    plan: "Free",
+    host: "movies-ratings2.p.rapidapi.com",
+    endpoint: "/ratings",
+    tags: ["movies","ratings","imdb","entertainment"],
+    params: [
+      { name: "id", type: "string", required: true, desc: "IMDb title ID. e.g. 'tt0111161' (The Shawshank Redemption)" }
+    ]
+  },
+];
+
+// ── Schema generators ──────────────────────────────────────
+
+function buildAnthropicSchema(tool) {
+  const props = {};
+  const required = [];
+  tool.params.forEach(p => {
+    props[p.name] = { type: p.type === "enum" ? "string" : p.type, description: p.desc };
+    if (p.required) required.push(p.name);
+  });
+  const schema = {
+    name: tool.id,
+    description: tool.desc,
+    input_schema: { type: "object", properties: props, required }
+  };
+  return JSON.stringify(schema, null, 2);
+}
+
+function buildOpenAISchema(tool) {
+  const props = {};
+  const required = [];
+  tool.params.forEach(p => {
+    props[p.name] = { type: p.type === "enum" ? "string" : p.type, description: p.desc };
+    if (p.required) required.push(p.name);
+  });
+  const schema = {
+    type: "function",
+    function: {
+      name: tool.id,
+      description: tool.desc,
+      parameters: { type: "object", properties: props, required }
+    }
+  };
+  return JSON.stringify(schema, null, 2);
+}
+
+function buildCurl(tool) {
+  const exampleParams = tool.params.filter(p => p.required).map(p => {
+    const exVal = p.name === "ticker" ? "NVDA"
+      : p.name === "query" ? "example+query"
+      : p.name === "username" ? "example_user"
+      : p.name === "unique_id" ? "charlidamelio"
+      : p.name === "search_type" ? "byname"
+      : p.name === "match_type" ? "live"
+      : p.name === "orgId" ? "1"
+      : p.name === "year" ? "2025"
+      : p.name === "player_id" ? "817181"
+      : p.name === "tournament_id" ? "132"
+      : p.name === "season_id" ? "65360"
+      : p.name === "user_id" ? "7128593328456041478"
+      : p.name === "lastName" ? "Woods"
+      : p.name === "id" ? "tt0111161"
+      : "VALUE";
+    return `${p.name}=${exVal}`;
+  });
+  const queryStr = exampleParams.length ? "?" + exampleParams.join("&") : "";
+  return `curl --request ${tool.method} \\
+  --url 'https://${tool.host}${tool.endpoint.replace(/\{[^}]+\}/g,'')}${queryStr}' \\
+  --header 'Content-Type: application/json' \\
+  --header 'x-rapidapi-host: ${tool.host}' \\
+  --header 'x-rapidapi-key: YOUR_RAPIDAPI_KEY'`;
+}
+
+// ── Syntax highlighting ────────────────────────────────────
+
+function highlight(json) {
+  return json
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, m => {
+      if (/^"/.test(m)) {
+        return /:$/.test(m) ? `<span class="j-key">${m}</span>` : `<span class="j-str">${m}</span>`;
+      }
+      if (/true|false/.test(m)) return `<span class="j-bool">${m}</span>`;
+      if (/null/.test(m)) return `<span class="j-null">${m}</span>`;
+      return `<span class="j-num">${m}</span>`;
+    });
+}
+
+// ── State ─────────────────────────────────────────────────
+
+let activeTool = null;
+let currentFormat = 'anthropic';
+let activeTab = 'schema';
+let searchQ = '';
+let activeCat = 'all';
+
+// ── Render grid ───────────────────────────────────────────
+
+function renderGrid() {
+  const grid = document.getElementById('toolsGrid');
+  const empty = document.getElementById('emptyState');
+
+  const filtered = TOOLS.filter(t => {
+    const matchCat = activeCat === 'all' || t.category === activeCat;
+    const q = searchQ.toLowerCase();
+    const matchQ = !q || t.name.includes(q) || t.desc.toLowerCase().includes(q)
+      || t.tags.some(tag => tag.includes(q)) || t.category.toLowerCase().includes(q);
+    return matchCat && matchQ;
+  });
+
+  if (filtered.length === 0) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  grid.innerHTML = filtered.map(t => `
+    <div class="tool-card" onclick="openModal('${t.id}')">
+      <div class="card-header">
+        <div class="card-icon">${t.icon}</div>
+        <div class="card-meta">
+          <span class="card-badge badge-free">${t.plan}</span>
+          <span class="card-badge badge-${t.method.toLowerCase()}">${t.method}</span>
+        </div>
+      </div>
+      <div class="card-name">${t.name}</div>
+      <div class="card-desc">${t.desc}</div>
+      <div class="card-tags">
+        ${t.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+        <span class="tag">${t.category}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Modal ─────────────────────────────────────────────────
+
+function openModal(id) {
+  activeTool = TOOLS.find(t => t.id === id);
+  if (!activeTool) return;
+
+  document.getElementById('modalIcon').textContent = activeTool.icon;
+  document.getElementById('modalName').textContent = activeTool.name;
+  document.getElementById('modalDesc').textContent = activeTool.desc;
+
+  const methodEl = document.getElementById('modalMethod');
+  methodEl.textContent = activeTool.method;
+  methodEl.className = `card-badge badge-${activeTool.method.toLowerCase()}`;
+
+  currentFormat = 'anthropic';
+  activeTab = 'schema';
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-schema').classList.add('active');
+  document.querySelector('.tab-btn').classList.add('active');
+  document.querySelectorAll('.fmt-btn').forEach((b,i) => b.classList.toggle('active', i===0));
+
+  refreshSchemaCode();
+  refreshParams();
+  refreshEndpoint();
+
+  document.getElementById('overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('overlay')) return;
+  document.getElementById('overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  btn.classList.add('active');
+  activeTab = tab;
+}
+
+function switchFormat(fmt, btn) {
+  currentFormat = fmt;
+  document.querySelectorAll('.fmt-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  refreshSchemaCode();
+}
+
+function refreshSchemaCode() {
+  if (!activeTool) return;
+  const raw = currentFormat === 'anthropic'
+    ? buildAnthropicSchema(activeTool)
+    : buildOpenAISchema(activeTool);
+  document.getElementById('schemaCode').innerHTML = highlight(raw);
+  document.getElementById('schemaCode')._raw = raw;
+}
+
+function refreshParams() {
+  if (!activeTool) return;
+  document.getElementById('paramsBody').innerHTML = activeTool.params.map(p => `
+    <tr>
+      <td><span class="param-name">${p.name}</span></td>
+      <td><span class="param-type">${p.type}</span></td>
+      <td><span class="${p.required ? 'req-yes' : 'req-no'}">${p.required ? 'yes' : 'no'}</span></td>
+      <td><span class="param-desc">${p.desc}</span></td>
+    </tr>
+  `).join('');
+}
+
+function refreshEndpoint() {
+  if (!activeTool) return;
+  document.getElementById('endpointRow').innerHTML = `
+    <span class="method-pill method-${activeTool.method.toLowerCase()}">${activeTool.method}</span>
+    <span class="endpoint-url">https://${activeTool.host}${activeTool.endpoint}</span>
+  `;
+  document.getElementById('hostBlock').textContent = activeTool.host;
+  const curl = buildCurl(activeTool);
+  document.getElementById('curlBlock').innerHTML = curl
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  document.getElementById('curlBlock')._raw = curl;
+}
+
+// ── Copy buttons ─────────────────────────────────────────
+
+function copySchema() {
+  const raw = document.getElementById('schemaCode')._raw;
+  navigator.clipboard.writeText(raw).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = 'copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1800);
+  });
+}
+
+function copyCurl() {
+  const raw = document.getElementById('curlBlock')._raw;
+  navigator.clipboard.writeText(raw).then(() => {
+    const btns = document.querySelectorAll('.copy-btn');
+    const btn = btns[btns.length - 1];
+    btn.textContent = 'copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1800);
+  });
+}
+
+// ── Search + filter ───────────────────────────────────────
+
+document.getElementById('searchInput').addEventListener('input', e => {
+  searchQ = e.target.value.trim();
+  renderGrid();
+});
+
+document.getElementById('filterPills').addEventListener('click', e => {
+  if (!e.target.matches('.pill')) return;
+  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  e.target.classList.add('active');
+  activeCat = e.target.dataset.cat;
+  renderGrid();
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+renderGrid();
+</script>
+</body>
+</html>
