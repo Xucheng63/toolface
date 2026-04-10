@@ -1215,17 +1215,17 @@ const TOOLS = [
     endpoint: "/airline/book_reservation",
     tags: ["airline","booking","reservation"],
     params: [
-      { name: "user_id", type: "string", required: true, desc: "The ID of the user, such as 'sara_doe_496'." },
-      { name: "origin", type: "string", required: true, desc: "IATA code for origin city, such as 'SFO'." },
-      { name: "destination", type: "string", required: true, desc: "IATA code for destination city, such as 'JFK'." },
-      { name: "flight_type", type: "string", required: true, desc: "'one_way' or 'round_trip'." },
-      { name: "cabin", type: "string", required: true, desc: "'basic_economy', 'economy', or 'business'." },
-      { name: "flights", type: "array", required: true, desc: "Array of flight objects with flight_number and date." },
-      { name: "passengers", type: "array", required: true, desc: "Array of passenger objects with details." },
-      { name: "payment_methods", type: "array", required: true, desc: "Array of payment method objects." },
-      { name: "total_baggages", type: "integer", required: true, desc: "Total number of baggage items." },
-      { name: "nonfree_baggages", type: "integer", required: true, desc: "Number of non-free baggage items." },
-      { name: "insurance", type: "string", required: true, desc: "Whether the reservation includes insurance." }
+      { name: "user_id", type: "string", required: true, desc: "The ID of the user to book the reservation such as 'sara_doe_496'`." },
+      { name: "origin", type: "string", required: true, desc: "The IATA code for the origin city such as 'SFO'." },
+      { name: "destination", type: "string", required: true, desc: "The IATA code for the destination city such as 'JFK'." },
+      { name: "flight_type", type: "string", required: true, desc: "The type of flight such as 'one_way' or 'round_trip'." },
+      { name: "cabin", type: "string", required: true, desc: "The cabin class such as 'basic_economy', 'economy', or 'business'." },
+      { name: "flights", type: "array", required: true, desc: "An array of objects containing details about each piece of flight.. Each item is an object with fields — flight_number (string, required): Flight number, such as 'HAT001'.; date (string, required): The date for the flight in the format 'YYYY-MM-DD', such as '2024-05-01'." },
+      { name: "passengers", type: "array", required: true, desc: "An array of objects containing details about each passenger.. Each item is an object with fields — first_name (string, required): Passenger's first name; last_name (string, required): Passenger's last name; dob (string, required): Date of birth in YYYY-MM-DD format" },
+      { name: "payment_methods", type: "array", required: true, desc: "An array of objects containing details about each payment method.. Each item is an object with fields — payment_id (string, required): Unique identifier for the payment; amount (integer, required): Payment amount in dollars" },
+      { name: "total_baggages", type: "integer", required: true, desc: "The total number of baggage items to book the reservation." },
+      { name: "nonfree_baggages", type: "integer", required: true, desc: "The number of non-free baggage items to book the reservation." },
+      { name: "insurance", type: "string", required: true, desc: "Whether the reservation has insurance." }
     ]
   },
   {
@@ -1418,10 +1418,10 @@ const TOOLS = [
     endpoint: "/airline/update_reservation_flights",
     tags: ["airline","flights","reservation"],
     params: [
-      { name: "reservation_id", type: "string", required: true, desc: "Reservation ID, such as 'ZFA04Y'." },
-      { name: "cabin", type: "string", required: true, desc: "Cabin class of the updated reservation." },
-      { name: "flights", type: "array", required: true, desc: "Full updated array of flight objects." },
-      { name: "payment_id", type: "string", required: true, desc: "Payment ID for the difference." }
+      { name: "reservation_id", type: "string", required: true, desc: "The reservation ID, such as 'ZFA04Y'." },
+      { name: "cabin", type: "string", required: true, desc: "The cabin class of the reservation" },
+      { name: "flights", type: "array", required: true, desc: "An array of objects containing details about each piece of flight in the ENTIRE new reservation. Even if the a flight segment is not changed, it should still be included in the array.. Each item is an object with fields — flight_number (string, required): Flight number, such as 'HAT001'.; date (string, required): The date for the flight in the format 'YYYY-MM-DD', such as '2024-05-01'." },
+      { name: "payment_id", type: "string", required: true, desc: "The payment id stored in user profile, such as 'credit_card_7815826', 'gift_card_7815826', 'certificate_7815826'." }
     ]
   },
   {
@@ -1438,8 +1438,8 @@ const TOOLS = [
     endpoint: "/airline/update_reservation_passengers",
     tags: ["airline","passengers","reservation"],
     params: [
-      { name: "reservation_id", type: "string", required: true, desc: "Reservation ID, such as 'ZFA04Y'." },
-      { name: "passengers", type: "array", required: true, desc: "Updated array of passenger objects." }
+      { name: "reservation_id", type: "string", required: true, desc: "The reservation ID, such as 'ZFA04Y'." },
+      { name: "passengers", type: "array", required: true, desc: "An array of objects containing details about each passenger.. Each item is an object with fields — first_name (string, required): Passenger's first name; last_name (string, required): Passenger's last name; dob (string, required): Date of birth in YYYY-MM-DD format" }
     ]
   },
   {
@@ -2053,7 +2053,7 @@ const TOOLS = [
     endpoint: "/telecom/user/set_network_mode_preference",
     tags: ["telecom","user-tool","network","settings"],
     params: [
-      { name: "mode", type: "string", required: true, desc: "Network mode to set, e.g. '5G', 'LTE', '3G'." }
+      { name: "mode", type: "string", required: true, desc: "Mode. Allowed values: 4g_5g_preferred, 4g_only, 3g_only, 2g_only" }
     ]
   },
   {
@@ -2205,7 +2205,7 @@ const TOOLS = [
     endpoint: "/telecom/user/set_apn_settings",
     tags: ["telecom","user-tool","apn","settings"],
     params: [
-      { name: "apn_settings", type: "string", required: true, desc: "APN configuration string to apply." }
+      { name: "apn_settings", type: "object", required: true, desc: "Apn Settings. Object with fields — apn_name (string): The name identifier for the APN connection.; reset_at_reboot (boolean): Whether the APN settings will be reset at the next reboot.; mms_apn (string): Specific APN name used for MMS traffic, if different from general data.; mmsc_url (string): The URL of the Multimedia Messaging Service Center (MMSC). Crucial for MMS.; mms_proxy (string): The pro" }
     ]
   },
   {
