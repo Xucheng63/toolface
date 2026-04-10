@@ -868,7 +868,7 @@ footer {
     <div class="modal-tabs">
       <button class="tab-btn active" onclick="switchTab('schema', this)">Schema</button>
       <button class="tab-btn" onclick="switchTab('params', this)">Parameters</button>
-      <button class="tab-btn" onclick="switchTab('endpoint', this)">Endpoint</button>
+      <button class="tab-btn" id="endpointTabBtn" onclick="switchTab('endpoint', this)">Endpoint</button>
     </div>
     <div class="modal-body">
       <!-- Schema tab -->
@@ -20842,6 +20842,11 @@ function openModal(id) {
   methodEl.textContent = activeTool.method;
   methodEl.className = `card-badge badge-${activeTool.method.toLowerCase()}`;
 
+  // Hide Endpoint tab for TAU2 and Nestful (no real endpoint)
+  const endpointTabBtn = document.getElementById('endpointTabBtn');
+  const hasEndpoint = activeTool.source === 'rapidapi';
+  endpointTabBtn.style.display = hasEndpoint ? '' : 'none';
+
   currentFormat = 'anthropic';
   activeTab = 'schema';
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -20852,7 +20857,7 @@ function openModal(id) {
 
   refreshSchemaCode();
   refreshParams();
-  refreshEndpoint();
+  if (hasEndpoint) refreshEndpoint();
 
   document.getElementById('overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -20934,12 +20939,10 @@ function refreshEndpoint() {
 
 // ── Copy buttons ─────────────────────────────────────────
 
-
 function fallbackCopy(text) {
   const ta = document.createElement('textarea');
   ta.value = text;
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
+  ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
   document.body.appendChild(ta);
   ta.focus();
   ta.select();
@@ -20947,23 +20950,21 @@ function fallbackCopy(text) {
   document.body.removeChild(ta);
 }
 
+function flashBtn(btn) {
+  btn.textContent = 'copied!';
+  btn.classList.add('copied');
+  setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1800);
+}
+
 function copySchema() {
   const raw = document.getElementById('schemaCode')._raw;
   if (!raw) return;
   const btn = document.getElementById('copySchemaBtn');
-  const doCopy = () => {
-    btn.textContent = 'copied!';
-    btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1800);
-  };
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(raw).then(doCopy).catch(() => {
-      fallbackCopy(raw);
-      doCopy();
-    });
+    navigator.clipboard.writeText(raw).then(() => flashBtn(btn)).catch(() => { fallbackCopy(raw); flashBtn(btn); });
   } else {
     fallbackCopy(raw);
-    doCopy();
+    flashBtn(btn);
   }
 }
 
@@ -20971,19 +20972,11 @@ function copyCurl() {
   const raw = document.getElementById('curlBlock')._raw;
   if (!raw) return;
   const btn = document.getElementById('copyCurlBtn');
-  const doCopy = () => {
-    btn.textContent = 'copied!';
-    btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1800);
-  };
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(raw).then(doCopy).catch(() => {
-      fallbackCopy(raw);
-      doCopy();
-    });
+    navigator.clipboard.writeText(raw).then(() => flashBtn(btn)).catch(() => { fallbackCopy(raw); flashBtn(btn); });
   } else {
     fallbackCopy(raw);
-    doCopy();
+    flashBtn(btn);
   }
 }
 
