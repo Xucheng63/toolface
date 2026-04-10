@@ -881,7 +881,7 @@ footer {
           </div>
           <div style="position:relative">
             <div class="code-block" id="schemaCode"></div>
-            <button class="copy-btn" onclick="copySchema()">copy</button>
+            <button class="copy-btn" id="copySchemaBtn" onclick="copySchema()">copy</button>
           </div>
         </div>
       </div>
@@ -904,7 +904,7 @@ footer {
           <div class="schema-label" style="margin-top:16px">Example cURL</div>
           <div style="position:relative">
             <div class="code-block" id="curlBlock"></div>
-            <button class="copy-btn" onclick="copyCurl()">copy</button>
+            <button class="copy-btn" id="copyCurlBtn" onclick="copyCurl()">copy</button>
           </div>
         </div>
       </div>
@@ -20934,25 +20934,57 @@ function refreshEndpoint() {
 
 // ── Copy buttons ─────────────────────────────────────────
 
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+}
+
 function copySchema() {
   const raw = document.getElementById('schemaCode')._raw;
-  navigator.clipboard.writeText(raw).then(() => {
-    const btn = document.querySelector('.copy-btn');
+  if (!raw) return;
+  const btn = document.getElementById('copySchemaBtn');
+  const doCopy = () => {
     btn.textContent = 'copied!';
     btn.classList.add('copied');
     setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1800);
-  });
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(raw).then(doCopy).catch(() => {
+      fallbackCopy(raw);
+      doCopy();
+    });
+  } else {
+    fallbackCopy(raw);
+    doCopy();
+  }
 }
 
 function copyCurl() {
   const raw = document.getElementById('curlBlock')._raw;
-  navigator.clipboard.writeText(raw).then(() => {
-    const btns = document.querySelectorAll('.copy-btn');
-    const btn = btns[btns.length - 1];
+  if (!raw) return;
+  const btn = document.getElementById('copyCurlBtn');
+  const doCopy = () => {
     btn.textContent = 'copied!';
     btn.classList.add('copied');
     setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1800);
-  });
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(raw).then(doCopy).catch(() => {
+      fallbackCopy(raw);
+      doCopy();
+    });
+  } else {
+    fallbackCopy(raw);
+    doCopy();
+  }
 }
 
 // ── Search + filter ───────────────────────────────────────
