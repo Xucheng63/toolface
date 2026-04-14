@@ -868,6 +868,7 @@ footer {
     <div class="modal-tabs">
       <button class="tab-btn active" onclick="switchTab('schema', this)">Schema</button>
       <button class="tab-btn" onclick="switchTab('params', this)">Parameters</button>
+      <button class="tab-btn" id="exampleTabBtn" onclick="switchTab('example', this)">Example Call</button>
       <button class="tab-btn" id="endpointTabBtn" onclick="switchTab('endpoint', this)">Endpoint</button>
     </div>
     <div class="modal-body">
@@ -893,6 +894,16 @@ footer {
           </tr></thead>
           <tbody id="paramsBody"></tbody>
         </table>
+      </div>
+      <!-- Example Call tab -->
+      <div class="tab-panel" id="tab-example">
+        <div class="schema-section">
+          <div class="schema-label">Example Function Call</div>
+          <div style="position:relative">
+            <div class="code-block" id="exampleCode"></div>
+            <button class="copy-btn" id="copyExampleBtn" onclick="copyExample()">copy</button>
+          </div>
+        </div>
       </div>
       <!-- Endpoint tab -->
       <div class="tab-panel" id="tab-endpoint">
@@ -20701,6 +20712,274 @@ const TOOLS = [
   }
 ];
 
+const TAU2_EXAMPLES = {
+  "airline_book_reservation": {
+    "user_id": "sara_doe_496",
+    "origin": "SFO",
+    "destination": "JFK",
+    "flight_type": "round_trip",
+    "cabin": "business",
+    "flights": [
+      {
+        "flight_number": "HAT001",
+        "date": "2024-05-01"
+      }
+    ],
+    "passengers": [
+      {
+        "first_name": "John",
+        "last_name": "Doe",
+        "dob": "1990-01-01"
+      }
+    ],
+    "payment_methods": [
+      {
+        "payment_id": "<payment_id>",
+        "amount": 1
+      }
+    ],
+    "total_baggages": 1,
+    "nonfree_baggages": 1,
+    "insurance": "yes"
+  },
+  "airline_calculate": {
+    "expression": "2 + 2"
+  },
+  "airline_cancel_reservation": {
+    "reservation_id": "ZFA04Y"
+  },
+  "airline_get_reservation_details": {
+    "reservation_id": "8JX2WO"
+  },
+  "airline_get_user_details": {
+    "user_id": "sara_doe_496"
+  },
+  "airline_list_all_airports": {},
+  "airline_search_direct_flight": {
+    "origin": "JFK",
+    "destination": "LAX",
+    "date": "2024-01-01"
+  },
+  "airline_search_onestop_flight": {
+    "origin": "JFK",
+    "destination": "LAX",
+    "date": "2024-05-01"
+  },
+  "airline_send_certificate": {
+    "user_id": "sara_doe_496",
+    "amount": 1
+  },
+  "airline_transfer_to_human": {
+    "summary": "Customer needs assistance with their account."
+  },
+  "airline_update_baggages": {
+    "reservation_id": "ZFA04Y",
+    "total_baggages": 1,
+    "nonfree_baggages": 1,
+    "payment_id": "credit_card_7815826"
+  },
+  "airline_update_flights": {
+    "reservation_id": "ZFA04Y",
+    "cabin": "business",
+    "flights": [
+      {
+        "flight_number": "HAT001",
+        "date": "2024-05-01"
+      }
+    ],
+    "payment_id": "credit_card_7815826"
+  },
+  "airline_update_passengers": {
+    "reservation_id": "ZFA04Y",
+    "passengers": [
+      {
+        "first_name": "John",
+        "last_name": "Doe",
+        "dob": "1990-01-01"
+      }
+    ]
+  },
+  "airline_get_flight_status": {
+    "flight_number": "HAT001",
+    "date": "2024-05-01"
+  },
+  "retail_calculate": {
+    "expression": "2 + 2"
+  },
+  "retail_cancel_pending_order": {
+    "order_id": "#W0000000",
+    "reason": "no longer needed"
+  },
+  "retail_exchange_delivered_order": {
+    "order_id": "#W0000000",
+    "item_ids": [
+      "1008292230"
+    ],
+    "new_item_ids": [
+      "1008292230"
+    ],
+    "payment_method_id": "gift_card_0000000"
+  },
+  "retail_find_user_by_name_zip": {
+    "first_name": "John",
+    "last_name": "Doe",
+    "zip": "12345"
+  },
+  "retail_find_user_by_email": {
+    "email": "something@example.com"
+  },
+  "retail_get_order_details": {
+    "order_id": "#W0000000"
+  },
+  "retail_get_product_details": {
+    "product_id": "6086499569"
+  },
+  "retail_get_item_details": {
+    "item_id": "6086499569"
+  },
+  "retail_get_user_details": {
+    "user_id": "sara_doe_496"
+  },
+  "retail_list_all_product_types": {},
+  "retail_modify_order_address": {
+    "order_id": "#W0000000",
+    "address1": "123 Main St",
+    "address2": "Apt 1",
+    "city": "San Francisco",
+    "state": "CA",
+    "country": "USA",
+    "zip": "12345"
+  },
+  "retail_modify_order_items": {
+    "order_id": "#W0000000",
+    "item_ids": [
+      "1008292230"
+    ],
+    "new_item_ids": [
+      "1008292230"
+    ],
+    "payment_method_id": "gift_card_0000000"
+  },
+  "retail_modify_order_payment": {
+    "order_id": "#W0000000",
+    "payment_method_id": "gift_card_0000000"
+  },
+  "retail_modify_user_address": {
+    "user_id": "sara_doe_496",
+    "address1": "123 Main St",
+    "address2": "Apt 1",
+    "city": "San Francisco",
+    "state": "CA",
+    "country": "USA",
+    "zip": "12345"
+  },
+  "retail_return_delivered_order": {
+    "order_id": "#W0000000",
+    "item_ids": [
+      "1008292230"
+    ],
+    "payment_method_id": "gift_card_0000000"
+  },
+  "retail_transfer_to_human": {
+    "summary": "Customer needs assistance with their account."
+  },
+  "telecom_get_customer_by_phone": {
+    "phone_number": "555-123-4567"
+  },
+  "telecom_get_customer_by_id": {
+    "customer_id": "CUST_001"
+  },
+  "telecom_get_customer_by_name": {
+    "full_name": "John Doe",
+    "dob": "1990-01-01"
+  },
+  "telecom_get_details_by_id": {
+    "id": "<id>"
+  },
+  "telecom_suspend_line": {
+    "customer_id": "CUST_001",
+    "line_id": "LINE_001",
+    "reason": "no longer needed"
+  },
+  "telecom_resume_line": {
+    "customer_id": "CUST_001",
+    "line_id": "LINE_001"
+  },
+  "telecom_get_bills": {
+    "customer_id": "CUST_001",
+    "limit": 1
+  },
+  "telecom_send_payment_request": {
+    "customer_id": "CUST_001",
+    "bill_id": "BILL_001"
+  },
+  "telecom_get_data_usage": {
+    "customer_id": "CUST_001",
+    "line_id": "LINE_001"
+  },
+  "telecom_enable_roaming": {
+    "customer_id": "CUST_001",
+    "line_id": "LINE_001"
+  },
+  "telecom_disable_roaming": {
+    "customer_id": "CUST_001",
+    "line_id": "LINE_001"
+  },
+  "telecom_transfer_to_human": {
+    "summary": "Customer needs assistance with their account."
+  },
+  "telecom_refuel_data": {
+    "customer_id": "CUST_001",
+    "line_id": "LINE_001",
+    "gb_amount": 5
+  },
+  "telecom_user_check_status_bar": {},
+  "telecom_user_check_network_status": {},
+  "telecom_user_check_network_mode": {},
+  "telecom_user_set_network_mode": {
+    "mode": "<mode>"
+  },
+  "telecom_user_run_speed_test": {},
+  "telecom_user_toggle_airplane": {},
+  "telecom_user_check_sim": {},
+  "telecom_user_reseat_sim": {},
+  "telecom_user_toggle_data": {},
+  "telecom_user_toggle_roaming": {},
+  "telecom_user_check_data_restriction": {},
+  "telecom_user_toggle_data_saver": {},
+  "telecom_user_check_apn": {},
+  "telecom_user_set_apn": {
+    "apn_settings": {
+      "apn_name": "internet",
+      "mmsc_url": "http://mms.carrier.com/mms/wapenc",
+      "reset_at_reboot": false
+    }
+  },
+  "telecom_user_reset_apn": {},
+  "telecom_user_check_wifi": {},
+  "telecom_user_toggle_wifi": {},
+  "telecom_user_check_wifi_calling": {},
+  "telecom_user_toggle_wifi_calling": {},
+  "telecom_user_check_vpn": {},
+  "telecom_user_connect_vpn": {},
+  "telecom_user_disconnect_vpn": {},
+  "telecom_user_check_installed_apps": {},
+  "telecom_user_check_app_status": {
+    "app_name": "Messages"
+  },
+  "telecom_user_check_app_permissions": {
+    "app_name": "Messages"
+  },
+  "telecom_user_grant_permission": {
+    "app_name": "Messages",
+    "permission": "storage"
+  },
+  "telecom_user_can_send_mms": {},
+  "telecom_user_reboot_device": {},
+  "telecom_user_check_payment_request": {},
+  "telecom_user_make_payment": {}
+};
+
 // ── Schema generators ──────────────────────────────────────
 
 function buildAnthropicSchema(tool) {
@@ -20857,6 +21136,7 @@ function openModal(id) {
 
   refreshSchemaCode();
   refreshParams();
+  refreshExample();
   if (hasEndpoint) refreshEndpoint();
 
   document.getElementById('overlay').classList.add('open');
@@ -20922,6 +21202,53 @@ function refreshParams() {
       <td><span class="param-desc">${p.desc}</span></td>
     </tr>
   `).join('');
+}
+
+function refreshExample() {
+  if (!activeTool) return;
+  const exTab = document.getElementById('exampleTabBtn');
+  const isTau2 = activeTool.source === 'tau2';
+  exTab.style.display = isTau2 ? '' : 'none';
+  if (!isTau2) return;
+
+  const args = TAU2_EXAMPLES[activeTool.id] || {};
+
+  // Anthropic format — correct per docs.anthropic.com/tool-use
+  const anthropicCall = {
+    type: "tool_use",
+    id: "toolu_01A09q90qw90lq917835s6",
+    name: activeTool.id,
+    input: args
+  };
+
+  // OpenAI format — correct per platform.openai.com/docs/guides/function-calling
+  const openaiCall = {
+    role: "assistant",
+    content: null,
+    tool_calls: [{
+      id: "call_abc123",
+      type: "function",
+      function: {
+        name: activeTool.id,
+        arguments: JSON.stringify(args)
+      }
+    }]
+  };
+
+  // Display as two clearly labeled sections, not wrapped in one object
+  const raw = '// ── Anthropic\n' + JSON.stringify(anthropicCall, null, 2)
+            + '\n\n// ── OpenAI\n' + JSON.stringify(openaiCall, null, 2);
+  document.getElementById('exampleCode').innerHTML = highlight(raw);
+  document.getElementById('exampleCode')._raw = raw;
+}
+
+function copyExample() {
+  const raw = document.getElementById('exampleCode')._raw;
+  if (!raw) return;
+  const btn = document.getElementById('copyExampleBtn');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(raw).then(() => flashBtn(btn)).catch(() => { fallbackCopy(raw); flashBtn(btn); });
+  } else { fallbackCopy(raw); flashBtn(btn); }
 }
 
 function refreshEndpoint() {
