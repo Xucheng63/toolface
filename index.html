@@ -868,7 +868,9 @@ footer {
     <div class="modal-tabs">
       <button class="tab-btn active" onclick="switchTab('schema', this)">Schema</button>
       <button class="tab-btn" onclick="switchTab('params', this)">Parameters</button>
+      <button class="tab-btn" id="functionTabBtn" style="display:none" onclick="switchTab('function', this)">Function</button>
       <button class="tab-btn" id="exampleTabBtn" onclick="switchTab('example', this)">Example Call</button>
+      <button class="tab-btn" id="tryitTabBtn" style="display:none" onclick="switchTab('tryit', this)">▶ Try It</button>
       <button class="tab-btn" id="endpointTabBtn" onclick="switchTab('endpoint', this)">Endpoint</button>
     </div>
     <div class="modal-body">
@@ -883,6 +885,16 @@ footer {
           <div style="position:relative">
             <div class="code-block" id="schemaCode"></div>
             <button class="copy-btn" id="copySchemaBtn" onclick="copySchema()">copy</button>
+          </div>
+        </div>
+      </div>
+      <!-- Function tab -->
+      <div class="tab-panel" id="tab-function">
+        <div class="schema-section">
+          <div class="schema-label">Python Source</div>
+          <div style="position:relative">
+            <div class="code-block" id="functionCode" style="white-space:pre;overflow-x:auto"></div>
+            <button class="copy-btn" onclick="copyFunction()">copy</button>
           </div>
         </div>
       </div>
@@ -902,6 +914,27 @@ footer {
           <div style="position:relative">
             <div class="code-block" id="exampleCode"></div>
             <button class="copy-btn" id="copyExampleBtn" onclick="copyExample()">copy</button>
+          </div>
+        </div>
+      </div>
+      <!-- Try It tab -->
+      <div class="tab-panel" id="tab-tryit">
+        <div class="schema-section">
+          <div class="schema-label">Arguments <span style="font-weight:400;font-size:11px;opacity:0.6">(JSON)</span></div>
+          <textarea id="tryitInput" style="width:100%;height:160px;background:#1a1a2e;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:12px;font-family:monospace;font-size:13px;resize:vertical;box-sizing:border-box" placeholder='{"reservation_id": "Q69X3R"}'></textarea>
+          <div style="display:flex;gap:10px;margin-top:10px;align-items:center">
+            <button id="tryitBtn" onclick="executeTool()"
+              style="background:#6366f1;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:13px;cursor:pointer;font-weight:600">
+              ▶ Execute
+            </button>
+            <span id="tryitStatus" style="font-size:12px;opacity:0.7"></span>
+          </div>
+        </div>
+        <div class="schema-section" id="tryitResultSection" style="display:none">
+          <div class="schema-label">Result</div>
+          <div style="position:relative">
+            <div class="code-block" id="tryitResult"></div>
+            <button class="copy-btn" onclick="copyTryitResult()">copy</button>
           </div>
         </div>
       </div>
@@ -20712,232 +20745,308 @@ const TOOLS = [
   }
 ];
 
+const TAU2_FUNCTIONS = {
+  "airline_book_reservation": "def book_reservation(\n    self,\n    user_id: str,\n    origin: str,\n    destination: str,\n    flight_type: FlightType,\n    cabin: CabinClass,\n    flights: List[FlightInfo | dict],\n    passengers: List[Passenger | dict],\n    payment_methods: List[Payment | dict],\n    total_baggages: int,\n    nonfree_baggages: int,\n    insurance: Insurance,\n) -> Reservation:\n    \"\"\"\n    Book a reservation.\n\n    Args:\n        user_id: The ID of the user to book the reservation such as 'sara_doe_496'`.\n        origin: The IATA code for the origin city such as 'SFO'.\n        destination: The IATA code for the destination city such as 'JFK'.\n        flight_type: The type of flight such as 'one_way' or 'round_trip'.\n        cabin: The cabin class such as 'basic_economy', 'economy', or 'business'.\n        flights: An array of objects containing details about each piece of flight.\n        passengers: An array of objects containing details about each passenger.\n        payment_methods: An array of objects containing details about each payment method.\n        total_baggages: The total number of baggage items to book the reservation.\n        nonfree_baggages: The number of non-free baggage items to book the reservation.\n        insurance: Whether the reservation has insurance.\n    \"\"\"\n    if all(isinstance(flight, dict) for flight in flights):\n        flights = [FlightInfo(**flight) for flight in flights]\n    if all(isinstance(passenger, dict) for passenger in passengers):\n        passengers = [Passenger(**passenger) for passenger in passengers]\n    if all(isinstance(payment_method, dict) for payment_method in payment_methods):\n        payment_methods = [\n            Payment(**payment_method) for payment_method in payment_methods\n        ]\n    user = self._get_user(user_id)\n    reservation_id = self._get_new_reservation_id()\n\n    reservation = Reservation(\n        reservation_id=reservation_id,\n        user_id=user_id,\n        origin=origin,\n        destination=destination,\n        flight_type=flight_type,\n        cabin=cabin,\n        flights=[],\n        passengers=deepcopy(passengers),\n        payment_history=deepcopy(payment_methods),\n        created_at=self._get_datetime(),\n        total_baggages=total_baggages,\n        nonfree_baggages=nonfree_baggages,\n        insurance=insurance,\n    )\n\n    total_price = 0\n    all_flights_date_data: list[FlightDateStatusAvailable] = []\n\n    for flight_info in flights:\n        flight_number = flight_info.flight_number\n        flight = self._get_flight(flight_number)\n        flight_date_data = self._get_flight_instance(\n            flight_number=flight_number, date=flight_info.date\n        )\n        if not isinstance(flight_date_data, FlightDateStatusAvailable):\n            raise ValueError(\n                f\"Flight {flight_number} not available on date {flight_info.date}\"\n            )\n        if flight_date_data.available_seats[cabin] < len(passengers):\n            raise ValueError(f\"Not enough seats on flight {flight_number}\")\n        price = flight_date_data.prices[cabin]\n        reservation.flights.append(\n            ReservationFlight(\n                origin=flight.origin,\n                destination=flight.destination,\n                flight_number=flight_number,\n                date=flight_info.date,\n                price=price,\n            )\n        )\n        all_flights_date_data.append(flight_date_data)\n        total_price += price * len(passengers)\n\n    if insurance == \"yes\":\n        total_price += 30 * len(passengers)\n    total_price += 50 * nonfree_baggages\n\n    for payment_method in payment_methods:\n        payment_id = payment_method.payment_id\n        amount = payment_method.amount\n        if payment_id not in user.payment_methods:\n            raise ValueError(f\"Payment method {payment_id} not found\")\n        user_payment_method = user.payment_methods[payment_id]\n        if user_payment_method.source in {\"gift_card\", \"certificate\"}:\n            if user_payment_method.amount < amount:\n                raise ValueError(\n                    f\"Not enough balance in payment method {payment_id}\"\n                )\n\n    total_payment = sum(payment.amount for payment in payment_methods)\n    if total_payment != total_price:\n        raise ValueError(\n            f\"Payment amount does not add up, total price is {total_price}, but paid {total_payment}\"\n        )\n\n    for payment_method in payment_methods:\n        payment_id = payment_method.payment_id\n        amount = payment_method.amount\n        user_payment_method = user.payment_methods[payment_id]\n        if user_payment_method.source == \"gift_card\":\n            user_payment_method.amount -= amount\n        elif user_payment_method.source == \"certificate\":\n            user.payment_methods.pop(payment_id)\n\n    for flight_date_data in all_flights_date_data:\n        flight_date_data.available_seats[cabin] -= len(passengers)\n    self.db.reservations[reservation_id] = reservation\n    self.db.users[user_id].reservations.append(reservation_id)\n    return reservation",
+  "airline_calculate": "def calculate(self, expression: str) -> str:\n    \"\"\"\n    Calculate the result of a mathematical expression.\n\n    Args:\n        expression: The mathematical expression to calculate, such as '2 + 2'.\n\n    Returns:\n        The result of the mathematical expression.\n    \"\"\"\n    if not all(char in \"0123456789+-*/(). \" for char in expression):\n        raise ValueError(\"Invalid characters in expression\")\n    return str(round(float(eval(expression, {\"__builtins__\": None}, {})), 2))",
+  "airline_cancel_reservation": "def cancel_reservation(self, reservation_id: str) -> Reservation:\n    \"\"\"\n    Cancel the whole reservation.\n\n    Args:\n        reservation_id: The reservation ID, such as 'ZFA04Y'.\n\n    Returns:\n        The updated reservation.\n    \"\"\"\n    reservation = self._get_reservation(reservation_id)\n    refunds = []\n    for payment in reservation.payment_history:\n        refunds.append(Payment(payment_id=payment.payment_id, amount=-payment.amount))\n    reservation.payment_history.extend(refunds)\n    reservation.status = \"cancelled\"\n    return reservation",
+  "airline_get_reservation_details": "def get_reservation_details(self, reservation_id: str) -> Reservation:\n    \"\"\"\n    Get the details of a reservation.\n\n    Args:\n        reservation_id: The reservation ID, such as '8JX2WO'.\n\n    Returns:\n        The reservation details.\n    \"\"\"\n    return self._get_reservation(reservation_id)",
+  "airline_get_user_details": "def get_user_details(self, user_id: str) -> User:\n    \"\"\"\n    Get the details of a user, including their reservations.\n\n    Args:\n        user_id: The user ID, such as 'sara_doe_496'.\n\n    Returns:\n        The user details.\n    \"\"\"\n    return self._get_user(user_id)",
+  "airline_list_all_airports": "def list_all_airports(self) -> AirportInfo:\n    \"\"\"Returns a list of all available airports.\"\"\"\n    return [\n        AirportCode(iata=\"SFO\", city=\"San Francisco\"),\n        AirportCode(iata=\"JFK\", city=\"New York\"),\n        AirportCode(iata=\"LAX\", city=\"Los Angeles\"),\n        AirportCode(iata=\"ORD\", city=\"Chicago\"),\n        AirportCode(iata=\"DFW\", city=\"Dallas\"),\n        AirportCode(iata=\"DEN\", city=\"Denver\"),\n        AirportCode(iata=\"SEA\", city=\"Seattle\"),\n        AirportCode(iata=\"ATL\", city=\"Atlanta\"),\n        AirportCode(iata=\"MIA\", city=\"Miami\"),\n        AirportCode(iata=\"BOS\", city=\"Boston\"),\n        AirportCode(iata=\"PHX\", city=\"Phoenix\"),\n        AirportCode(iata=\"IAH\", city=\"Houston\"),\n        AirportCode(iata=\"LAS\", city=\"Las Vegas\"),\n        AirportCode(iata=\"MCO\", city=\"Orlando\"),\n        AirportCode(iata=\"EWR\", city=\"Newark\"),\n        AirportCode(iata=\"CLT\", city=\"Charlotte\"),\n        AirportCode(iata=\"MSP\", city=\"Minneapolis\"),\n        AirportCode(iata=\"DTW\", city=\"Detroit\"),\n        AirportCode(iata=\"PHL\", city=\"Philadelphia\"),\n        AirportCode(iata=\"LGA\", city=\"LaGuardia\"),\n    ]",
+  "airline_search_direct_flight": "def search_direct_flight(self, origin: str, destination: str, date: str) -> list[DirectFlight]:\n    \"\"\"\n    Search for direct flights between two cities on a specific date.\n\n    Args:\n        origin: The origin city airport in three letters, such as 'JFK'.\n        destination: The destination city airport in three letters, such as 'LAX'.\n        date: The date of the flight in the format 'YYYY-MM-DD', such as '2024-01-01'.\n\n    Returns:\n        The direct flights between the two cities on the specific date.\n    \"\"\"\n    return self._search_direct_flight(date=date, origin=origin, destination=destination)",
+  "airline_search_onestop_flight": "def search_onestop_flight(self, origin: str, destination: str, date: str) -> list[tuple[DirectFlight, DirectFlight]]:\n    \"\"\"\n    Search for one-stop flights between two cities on a specific date.\n\n    Args:\n        origin: The origin city airport in three letters, such as 'JFK'.\n        destination: The destination city airport in three letters, such as 'LAX'.\n        date: The date of the flight in the format 'YYYY-MM-DD', such as '2024-05-01'.\n\n    Returns:\n        A list of pairs of DirectFlight objects.\n    \"\"\"\n    results = []\n    for result1 in self._search_direct_flight(date=date, origin=origin, destination=None):\n        result1.date = date\n        date2 = (\n            f\"2024-05-{int(date[-2:]) + 1}\"\n            if \"+1\" in result1.scheduled_arrival_time_est\n            else date\n        )\n        for result2 in self._search_direct_flight(\n            date=date2,\n            origin=result1.destination,\n            destination=destination,\n            leave_after=result1.scheduled_arrival_time_est,\n        ):\n            result2.date = date2\n            results.append([result1, result2])\n    return results",
+  "airline_send_certificate": "def send_certificate(self, user_id: str, amount: int) -> str:\n    \"\"\"\n    Send a certificate to a user.\n\n    Args:\n        user_id: The ID of the user to send the certificate to, such as 'sara_doe_496'.\n        amount: The amount of the certificate to send.\n\n    Returns:\n        A message indicating the certificate was sent.\n    \"\"\"\n    user = self._get_user(user_id)\n    for payment_id in [f\"certificate_{id}\" for id in self._get_new_payment_id()]:\n        if payment_id not in user.payment_methods:\n            new_payment = Certificate(id=payment_id, amount=amount, source=\"certificate\")\n            user.payment_methods[payment_id] = new_payment\n            return f\"Certificate {payment_id} added to user {user_id} with amount {amount}.\"\n    raise ValueError(\"Too many certificates\")",
+  "airline_transfer_to_human": "def transfer_to_human_agents(self, summary: str) -> str:\n    \"\"\"\n    Transfer the user to a human agent, with a summary of the user's issue.\n\n    Args:\n        summary: A summary of the user's issue.\n\n    Returns:\n        A message indicating the user has been transferred to a human agent.\n    \"\"\"\n    return \"Transfer successful\"",
+  "airline_update_baggages": "def update_reservation_baggages(\n    self,\n    reservation_id: str,\n    total_baggages: int,\n    nonfree_baggages: int,\n    payment_id: str,\n) -> Reservation:\n    \"\"\"\n    Update the baggage information of a reservation.\n\n    Args:\n        reservation_id: The reservation ID, such as 'ZFA04Y'.\n        total_baggages: The updated total number of baggage items included in the reservation.\n        nonfree_baggages: The updated number of non-free baggage items included in the reservation.\n        payment_id: The payment id stored in user profile, such as 'credit_card_7815826'.\n\n    Returns:\n        The updated reservation.\n    \"\"\"\n    reservation = self._get_reservation(reservation_id)\n    user = self._get_user(reservation.user_id)\n    total_price = 50 * max(0, nonfree_baggages - reservation.nonfree_baggages)\n    payment = self._payment_for_update(user, payment_id, total_price)\n    if payment is not None:\n        reservation.payment_history.append(payment)\n    reservation.total_baggages = total_baggages\n    reservation.nonfree_baggages = nonfree_baggages\n    return reservation",
+  "airline_update_flights": "def update_reservation_flights(\n    self,\n    reservation_id: str,\n    cabin: CabinClass,\n    flights: List[FlightInfo | dict],\n    payment_id: str,\n) -> Reservation:\n    \"\"\"\n    Update the flight information of a reservation.\n\n    Args:\n        reservation_id: The reservation ID, such as 'ZFA04Y'.\n        cabin: The cabin class of the reservation.\n        flights: An array of objects containing details about each piece of flight in the ENTIRE new reservation.\n        payment_id: The payment id stored in user profile, such as 'credit_card_7815826'.\n\n    Returns:\n        The updated reservation.\n    \"\"\"\n    if all(isinstance(flight, dict) for flight in flights):\n        flights = [FlightInfo(**flight) for flight in flights]\n    reservation = self._get_reservation(reservation_id)\n    user = self._get_user(reservation.user_id)\n\n    total_price = 0\n    reservation_flights = []\n    for flight_info in flights:\n        matching = next(\n            (rf for rf in reservation.flights\n             if rf.flight_number == flight_info.flight_number\n             and rf.date == flight_info.date\n             and cabin == reservation.cabin),\n            None,\n        )\n        if matching:\n            total_price += matching.price * len(reservation.passengers)\n            reservation_flights.append(matching)\n            continue\n        flight = self._get_flight(flight_info.flight_number)\n        flight_date_data = self._get_flight_instance(\n            flight_number=flight_info.flight_number, date=flight_info.date\n        )\n        if not isinstance(flight_date_data, FlightDateStatusAvailable):\n            raise ValueError(f\"Flight {flight_info.flight_number} not available on date {flight_info.date}\")\n        if flight_date_data.available_seats[cabin] < len(reservation.passengers):\n            raise ValueError(f\"Not enough seats on flight {flight_info.flight_number}\")\n        reservation_flight = ReservationFlight(\n            flight_number=flight_info.flight_number,\n            date=flight_info.date,\n            price=flight_date_data.prices[cabin],\n            origin=flight.origin,\n            destination=flight.destination,\n        )\n        total_price += reservation_flight.price * len(reservation.passengers)\n        reservation_flights.append(reservation_flight)\n\n    total_price -= sum(f.price for f in reservation.flights) * len(reservation.passengers)\n    payment = self._payment_for_update(user, payment_id, total_price)\n    if payment is not None:\n        reservation.payment_history.append(payment)\n    reservation.flights = reservation_flights\n    reservation.cabin = cabin\n    return reservation",
+  "airline_update_passengers": "def update_reservation_passengers(\n    self, reservation_id: str, passengers: List[Passenger | dict]\n) -> Reservation:\n    \"\"\"\n    Update the passenger information of a reservation.\n\n    Args:\n        reservation_id: The reservation ID, such as 'ZFA04Y'.\n        passengers: An array of objects containing details about each passenger.\n\n    Returns:\n        The updated reservation.\n    \"\"\"\n    if all(isinstance(passenger, dict) for passenger in passengers):\n        passengers = [Passenger(**passenger) for passenger in passengers]\n    reservation = self._get_reservation(reservation_id)\n    if len(passengers) != len(reservation.passengers):\n        raise ValueError(\"Number of passengers does not match\")\n    reservation.passengers = deepcopy(passengers)\n    return reservation",
+  "airline_get_flight_status": "def get_flight_status(self, flight_number: str, date: str) -> str:\n    \"\"\"\n    Get the status of a flight.\n\n    Args:\n        flight_number: The flight number.\n        date: The date of the flight.\n\n    Returns:\n        The status of the flight.\n    \"\"\"\n    return self._get_flight_instance(flight_number, date).status",
+  "retail_calculate": "def calculate(self, expression: str) -> str:\n    \"\"\"\n    Calculate the result of a mathematical expression.\n\n    Args:\n        expression: The mathematical expression to calculate, such as '2 + 2'. The expression can contain numbers, operators (+, -, *, /), parentheses, and spaces.\n\n    Returns:\n        The result of the mathematical expression.\n\n    Raises:\n        ValueError: If the expression is invalid.\n    \"\"\"\n    if not all(char in \"0123456789+-*/(). \" for char in expression):\n        raise ValueError(\"Invalid characters in expression\")\n    return str(round(float(eval(expression, {\"__builtins__\": None}, {})), 2))",
+  "retail_cancel_pending_order": "def cancel_pending_order(self, order_id: str, reason: str) -> Order:\n    \"\"\"Cancel a pending order. If the order is already processed or delivered,\n    it cannot be cancelled. The agent needs to explain the cancellation detail\n    and ask for explicit user confirmation (yes/no) to proceed. If the user confirms,\n    the order status will be changed to 'cancelled' and the payment will be refunded.\n    The refund will be added to the user's gift card balance immediately if the payment\n    was made using a gift card, otherwise the refund would take 5-7 business days to process.\n    The function returns the order details after the cancellation.\n\n    Args:\n        order_id: The order id, such as '#W0000000'. Be careful there is a '#' symbol at the beginning of the order id.\n        reason: The reason for cancellation, which should be either 'no longer needed' or 'ordered by mistake'.\n\n    Returns:\n        Order: The order details after the cancellation.\n    \"\"\"\n    # check order exists and is pending\n    order = self._get_order(order_id)\n    if order.status != \"pending\":\n        raise ValueError(\"Non-pending order cannot be cancelled\")\n\n    # check reason\n    if reason not in {\"no longer needed\", \"ordered by mistake\"}:\n        raise ValueError(\"Invalid reason\")\n\n    # handle refund\n    refunds = []\n    for payment in order.payment_history:\n        payment_id = payment.payment_method_id\n        refund = OrderPayment(\n            transaction_type=\"refund\",\n            amount=payment.amount,\n            payment_method_id=payment_id,\n        )\n        refunds.append(refund)\n        user = self._get_user(order.user_id)\n        payment_method = self._get_payment_method(user.user_id, payment_id)\n        if isinstance(payment_method, GiftCard):  # refund to gift card immediately\n            payment_method.balance += payment.amount\n            payment_method.balance = round(payment_method.balance, 2)\n\n    # update order status\n    order.status = \"cancelled\"\n    order.cancel_reason = reason\n    order.payment_history.extend(refunds)\n\n    return order",
+  "retail_exchange_delivered_order_items": "def exchange_delivered_order_items(\n    self,\n    order_id: str,\n    item_ids: List[str],\n    new_item_ids: List[str],\n    payment_method_id: str,\n) -> Order:\n    \"\"\"Exchange items in a delivered order to new items of the same product type.\n    For a delivered order, return or exchange can be only done once by the agent.\n    The agent needs to explain the exchange detail and ask for explicit user confirmation (yes/no) to proceed.\n\n    Args:\n        order_id: The order id, such as '#W0000000'. Be careful there is a '#' symbol at the beginning of the order id.\n        item_ids: The item ids to be exchanged, each such as '1008292230'. There could be duplicate items in the list.\n        new_item_ids: The item ids to be exchanged for, each such as '1008292230'.\n                     There could be duplicate items in the list. Each new item id should match the item id\n                     in the same position and be of the same product.\n        payment_method_id: The payment method id to pay or receive refund for the item price difference,\n                         such as 'gift_card_0000000' or 'credit_card_0000000'. These can be looked up\n                         from the user or order details.\n\n    Returns:\n        Order: The order details after the exchange.\n\n    Raises:\n        ValueError: If the order is not delivered.\n        ValueError: If the items to be exchanged do not exist.\n        ValueError: If the new items do not exist or do not match the old items.\n        ValueError: If the number of items to be exchanged does not match.\n    \"\"\"\n    # check order exists and is delivered\n    order = self._get_order(order_id)\n    if order.status != \"delivered\":\n        raise ValueError(\"Non-delivered order cannot be exchanged\")\n\n    # check the items to be exchanged exist. There can be duplicate items in the list.\n    all_item_ids = [item.item_id for item in order.items]\n    for item_id in item_ids:\n        if item_ids.count(item_id) > all_item_ids.count(item_id):\n            raise ValueError(f\"Number of {item_id} not found.\")\n\n    # check new items exist and match old items and are available\n    if len(item_ids) != len(new_item_ids):\n        raise ValueError(\"The number of items to be exchanged should match.\")\n\n    diff_price = 0\n    for item_id, new_item_id in zip(item_ids, new_item_ids):\n        item = next((item for item in order.items if item.item_id == item_id), None)\n        if item is None:\n            raise ValueError(f\"Item {item_id} not found\")\n        product_id = item.product_id\n        variant = self._get_variant(product_id, new_item_id)\n        if not variant.available:\n            raise ValueError(f\"New item {new_item_id} not found or available\")\n\n        old_price = item.price\n        new_price = variant.price\n        diff_price += new_price - old_price\n\n    diff_price = round(diff_price, 2)\n\n    # check payment method exists and can cover the price difference if gift card\n    payment_method = self._get_payment_method(order.user_id, payment_method_id)\n\n    if isinstance(payment_method, GiftCard) and payment_method.balance < diff_price:\n        raise ValueError(\n            \"Insufficient gift card balance to pay for the price difference\"\n        )\n\n    # modify the order\n    order.status = \"exchange requested\"\n    order.exchange_items = sorted(item_ids)\n    order.exchange_new_items = sorted(new_item_ids)\n    order.exchange_payment_method_id = payment_method_id\n    order.exchange_price_difference = diff_price\n\n    return order",
+  "retail_find_user_id_by_name_zip": "def find_user_id_by_name_zip(\n    self, first_name: str, last_name: str, zip: str\n) -> str:\n    \"\"\"Find user id by first name, last name, and zip code. If the user is not found, the function\n    will return an error message. By default, find user id by email, and only call this function\n    if the user is not found by email or cannot remember email.\n\n    Args:\n        first_name: The first name of the customer, such as 'John'.\n        last_name: The last name of the customer, such as 'Doe'.\n        zip: The zip code of the customer, such as '12345'.\n\n    Returns:\n        str: The user id if found, otherwise an error message.\n\n    Raises:\n        ValueError: If the user is not found.\n    \"\"\"\n    for user_id, user in self.db.users.items():\n        if (\n            user.name.first_name.lower() == first_name.lower()\n            and user.name.last_name.lower() == last_name.lower()\n            and user.address.zip == zip\n        ):\n            return user_id\n    raise ValueError(\"User not found\")",
+  "retail_find_user_id_by_email": "def find_user_id_by_email(self, email: str) -> str:\n    \"\"\"Find user id by email. If the user is not found, the function will return an error message.\n\n    Args:\n        email: The email of the user, such as 'something@example.com'.\n\n    Returns:\n        str: The user id if found, otherwise an error message.\n\n    Raises:\n        ValueError: If the user is not found.\n    \"\"\"\n    for user_id, user in self.db.users.items():\n        if user.email.lower() == email.lower():\n            return user_id\n    raise ValueError(\"User not found\")",
+  "retail_get_order_details": "def get_order_details(self, order_id: str) -> Order:\n    \"\"\"Get the status and details of an order.\n\n    Args:\n        order_id: The order id, such as '#W0000000'. Be careful there is a '#' symbol at the beginning of the order id.\n\n    Returns:\n        Order: The order details.\n\n    Raises:\n        ValueError: If the order is not found.\n    \"\"\"\n    order = self._get_order(order_id)\n    return order",
+  "retail_get_product_details": "def get_product_details(self, product_id: str) -> Product:\n    \"\"\"Get the inventory details of a product.\n\n    Args:\n        product_id: The product id, such as '6086499569'. Be careful the product id is different from the item id.\n\n    Returns:\n        Product: The product details.\n\n    Raises:\n        ValueError: If the product is not found.\n    \"\"\"\n    product = self._get_product(product_id)\n    return product",
+  "retail_get_item_details": "def get_item_details(self, item_id: str) -> Variant:\n    \"\"\"Get the inventory details of an item.\n\n    Args:\n        item_id: The item id, such as '6086499569'. Be careful the item id is different from the product id.\n\n    Returns:\n        Variant: The item details.\n\n    Raises:\n        ValueError: If the item is not found.\n    \"\"\"\n    item = self._get_item(item_id)\n    return item",
+  "retail_get_user_details": "def get_user_details(self, user_id: str) -> User:\n    \"\"\"Get the details of a user, including their orders.\n\n    Args:\n        user_id: The user id, such as 'sara_doe_496'.\n\n    Returns:\n        User: The user details.\n\n    Raises:\n        ValueError: If the user is not found.\n    \"\"\"\n    user = self._get_user(user_id)\n    return user",
+  "retail_list_all_product_types": "def list_all_product_types(self) -> str:\n    \"\"\"List the name and product id of all product types.\n    Each product type has a variety of different items with unique item ids and options.\n    There are only 50 product types in the store.\n\n    Returns:\n        str: A JSON string mapping product names to their product IDs, sorted alphabetically by name.\n    \"\"\"\n    product_dict = {\n        product.name: product.product_id for product in self.db.products.values()\n    }\n    return json.dumps(product_dict, sort_keys=True)",
+  "retail_modify_pending_order_address": "def modify_pending_order_address(\n    self,\n    order_id: str,\n    address1: str,\n    address2: str,\n    city: str,\n    state: str,\n    country: str,\n    zip: str,\n) -> Order:\n    \"\"\"Modify the shipping address of a pending order. The agent needs to explain the modification detail and ask for explicit user confirmation (yes/no) to proceed.\n\n    Args:\n        order_id: The order id, such as '#W0000000'. Be careful there is a '#' symbol at the beginning of the order id.\n        address1: The first line of the address, such as '123 Main St'.\n        address2: The second line of the address, such as 'Apt 1' or ''.\n        city: The city, such as 'San Francisco'.\n        state: The state, such as 'CA'.\n        country: The country, such as 'USA'.\n        zip: The zip code, such as '12345'.\n\n    Returns:\n        Order: The order details after the modification.\n\n    Raises:\n        ValueError: If the order is not pending.\n    \"\"\"\n    # Check if the order exists and is pending\n    order = self._get_order(order_id)\n    if not self._is_pending_order(order):\n        raise ValueError(\"Non-pending order cannot be modified\")\n\n    # Modify the address\n    order.address = UserAddress(\n        address1=address1,\n        address2=address2,\n        city=city,\n        state=state,\n        country=country,\n        zip=zip,\n    )\n    return order",
+  "retail_modify_pending_order_items": "def modify_pending_order_items(\n    self,\n    order_id: str,\n    item_ids: List[str],\n    new_item_ids: List[str],\n    payment_method_id: str,\n) -> Order:\n    \"\"\"Modify items in a pending order to new items of the same product type. For a pending order, this function can only be called once. The agent needs to explain the exchange detail and ask for explicit user confirmation (yes/no) to proceed.\n\n    Args:\n        order_id: The order id, such as '#W0000000'. Be careful there is a '#' symbol at the beginning of the order id.\n        item_ids: The item ids to be modified, each such as '1008292230'. There could be duplicate items in the list.\n        new_item_ids: The item ids to be modified for, each such as '1008292230'. There could be duplicate items in the list. Each new item id should match the item id in the same position and be of the same product.\n        payment_method_id: The payment method id to pay or receive refund for the item price difference, such as 'gift_card_0000000' or 'credit_card_0000000'. These can be looked up from the user or order details.\n\n    Returns:\n        Order: The order details after the modification.\n\n    Raises:\n        ValueError: If the order is not pending.\n        ValueError: If the items to be modified do not exist.\n        ValueError: If the new items do not exist or do not match the old items.\n        ValueError: If the number of items to be modified does not match.\n    \"\"\"\n\n    # Check if the order exists and is pending\n    order = self._get_order(order_id)\n    if order.status != \"pending\":\n        raise ValueError(\"Non-pending order cannot be modified\")\n\n    # Check if the items to be modified exist. There can be duplicate items in the list.\n    all_item_ids = [item.item_id for item in order.items]\n    for item_id in item_ids:\n        if item_ids.count(item_id) > all_item_ids.count(item_id):\n            raise ValueError(f\"{item_id} not found\")\n\n    # Check new items exist, match old items, and are available\n    if len(item_ids) != len(new_item_ids):\n        raise ValueError(\"The number of items to be exchanged should match\")\n\n    diff_price = 0\n    for item_id, new_item_id in zip(item_ids, new_item_ids):\n        if item_id == new_item_id:\n            raise ValueError(\n                \"The new item id should be different from the old item id\"\n            )\n        item = next((item for item in order.items if item.item_id == item_id), None)\n        if item is None:\n            raise ValueError(f\"Item {item_id} not found\")\n        product_id = item.product_id\n        variant = self._get_variant(product_id, new_item_id)\n        if not variant.available:\n            raise ValueError(f\"New item {new_item_id} not found or available\")\n\n        old_price = item.price\n        new_price = variant.price\n        diff_price += new_price - old_price\n\n    # Check if the payment method exists\n    payment_method = self._get_payment_method(order.user_id, payment_method_id)\n\n    # If the new item is more expensive, check if the gift card has enough balance\n    if isinstance(payment_method, GiftCard) and payment_method.balance < diff_price:\n        raise ValueError(\"Insufficient gift card balance to pay for the new item\")\n\n    # Handle the payment or refund\n    order.payment_history.append(\n        OrderPayment(\n            transaction_type=\"payment\" if diff_price > 0 else \"refund\",\n            amount=abs(diff_price),\n            payment_method_id=payment_method_id,\n        )\n    )\n    if isinstance(payment_method, GiftCard):\n        payment_method.balance -= diff_price\n        payment_method.balance = round(payment_method.balance, 2)\n\n    # Modify the order\n    for item_id, new_item_id in zip(item_ids, new_item_ids):\n        item = next((item for item in order.items if item.item_id == item_id), None)\n        if item is None:\n            raise ValueError(f\"Item {item_id} not found\")\n        item.item_id = new_item_id\n        item.price = variant.price\n        item.options = variant.options\n    order.status = \"pending (item modified)\"\n\n    return order",
+  "retail_modify_pending_order_payment": "def modify_pending_order_payment(\n    self,\n    order_id: str,\n    payment_method_id: str,\n) -> Order:\n    \"\"\"Modify the payment method of a pending order. The agent needs to explain the modification detail and ask for explicit user confirmation (yes/no) to proceed.\n\n    Args:\n        order_id: The order id, such as '#W0000000'. Be careful there is a '#' symbol at the beginning of the order id.\n        payment_method_id: The payment method id to pay or receive refund for the item price difference, such as 'gift_card_0000000' or 'credit_card_0000000'. These can be looked up from the user or order details.\n\n    Returns:\n        Order: The order details after the modification.\n\n    Raises:\n        ValueError: If the order is not pending.\n        ValueError: If the payment method does not exist.\n        ValueError: If the payment history has more than one payment.\n        ValueError: If the new payment method is the same as the current one.\n    \"\"\"\n    order = self._get_order(order_id)\n\n    # Check if the order exists and is pending\n    if not self._is_pending_order(order):\n        raise ValueError(\"Non-pending order cannot be modified\")\n\n    # Check if the payment method exists\n    payment_method = self._get_payment_method(order.user_id, payment_method_id)\n\n    # Check that the payment history should only have one payment\n    if (\n        len(order.payment_history) != 1\n        or order.payment_history[0].transaction_type != \"payment\"\n    ):\n        raise ValueError(\"There should be exactly one payment for a pending order\")\n\n    # Check that the payment method is different\n    if order.payment_history[0].payment_method_id == payment_method_id:\n        raise ValueError(\n            \"The new payment method should be different from the current one\"\n        )\n\n    amount = order.payment_history[0].amount\n\n    # Check if the new payment method has enough balance if it is a gift card\n    if isinstance(payment_method, GiftCard) and payment_method.balance < amount:\n        raise ValueError(\"Insufficient gift card balance to pay for the order\")\n\n    # Modify the payment method\n    order.payment_history.extend(\n        [\n            OrderPayment(\n                transaction_type=\"payment\",\n                amount=amount,\n                payment_method_id=payment_method_id,\n            ),\n            OrderPayment(\n                transaction_type=\"refund\",\n                amount=amount,\n                payment_method_id=order.payment_history[0].payment_method_id,\n            ),\n        ]\n    )\n\n    # If payment is made by gift card, update the balance\n    if isinstance(payment_method, GiftCard):\n        payment_method.balance -= amount\n        payment_method.balance = round(payment_method.balance, 2)\n\n    # If refund is made to a gift card, update the balance\n    old_payment_method = self._get_payment_method(\n        order.user_id, order.payment_history[0].payment_method_id\n    )\n    if isinstance(old_payment_method, GiftCard):\n        old_payment_method.balance += amount\n        old_payment_method.balance = round(old_payment_method.balance, 2)\n\n    return order",
+  "retail_modify_user_address": "def modify_user_address(\n    self,\n    user_id: str,\n    address1: str,\n    address2: str,\n    city: str,\n    state: str,\n    country: str,\n    zip: str,\n) -> User:\n    \"\"\"Modify the default address of a user. The agent needs to explain the modification detail and ask for explicit user confirmation (yes/no) to proceed.\n\n    Args:\n        user_id: The user id, such as 'sara_doe_496'.\n        address1: The first line of the address, such as '123 Main St'.\n        address2: The second line of the address, such as 'Apt 1' or ''.\n        city: The city, such as 'San Francisco'.\n        state: The state, such as 'CA'.\n        country: The country, such as 'USA'.\n        zip: The zip code, such as '12345'.\n\n    Returns:\n        User: The user details after the modification.\n\n    Raises:\n        ValueError: If the user is not found.\n    \"\"\"\n    user = self._get_user(user_id)\n    user.address = UserAddress(\n        address1=address1,\n        address2=address2,\n        city=city,\n        state=state,\n        country=country,\n        zip=zip,\n    )\n    return user",
+  "retail_return_delivered_order_items": "def return_delivered_order_items(\n    self,\n    order_id: str,\n    item_ids: List[str],\n    payment_method_id: str,\n) -> Order:\n    \"\"\"Return some items of a delivered order.\n    The order status will be changed to 'return requested'.\n    The agent needs to explain the return detail and ask for explicit user confirmation (yes/no) to proceed.\n    The user will receive follow-up email for how and where to return the item.\n\n    Args:\n        order_id: The order id, such as '#W0000000'. Be careful there is a '#' symbol at the beginning of the order id.\n        item_ids: The item ids to be returned, each such as '1008292230'. There could be duplicate items in the list.\n        payment_method_id: The payment method id to pay or receive refund for the item price difference, such as 'gift_card_0000000' or 'credit_card_0000000'.\n                         These can be looked up from the user or order details.\n\n    Returns:\n        Order: The order details after requesting the return.\n\n    Raises:\n        ValueError: If the order is not delivered.\n        ValueError: If the payment method is not the original payment method or a gift card.\n        ValueError: If the items to be returned do not exist.\n    \"\"\"\n    order = self._get_order(order_id)\n    if order.status != \"delivered\":\n        raise ValueError(\"Non-delivered order cannot be returned\")\n\n    # Check if the payment method exists and is either the original payment method or a gift card\n    user = self._get_user(order.user_id)\n    payment_method = self._get_payment_method(user.user_id, payment_method_id)\n\n    if (\n        not isinstance(payment_method, GiftCard)\n        and payment_method_id != order.payment_history[0].payment_method_id\n    ):\n        raise ValueError(\"Payment method should be the original payment method\")\n\n    # Check if the items to be returned exist (there could be duplicate items in either list)\n    all_item_ids = [item.item_id for item in order.items]\n    for item_id in item_ids:\n        if item_ids.count(item_id) > all_item_ids.count(item_id):\n            raise ValueError(\"Some item not found\")\n\n    # Update the order status\n    order.status = \"return requested\"\n    order.return_items = sorted(item_ids)\n    order.return_payment_method_id = payment_method_id\n\n    return order\n\n# @is_tool(ToolType.THINK)\n# def think(self, thought: str) -> str:\n#     \"\"\"\n#     Use the tool to think about something.\n#     It will not obtain new information or change the database, but just append the thought to the log.\n#     Use it when complex reasoning or some cache memory is needed.\n\n#     Args:\n#         thought: A thought to think about.\n\n#     Returns:\n#         Empty string\n#     \"\"\"\n#     return \"\"",
+  "retail_transfer_to_human_agents": "def transfer_to_human_agents(self, summary: str) -> str:\n    \"\"\"\n    Transfer the user to a human agent, with a summary of the user's issue.\n    Only transfer if\n     -  the user explicitly asks for a human agent\n     -  given the policy and the available tools, you cannot solve the user's issue.\n\n    Args:\n        summary: A summary of the user's issue.\n\n    Returns:\n        A message indicating the user has been transferred to a human agent.\n    \"\"\"\n    return \"Transfer successful\"",
+  "telecom_get_customer_by_phone": "def get_customer_by_phone(self, phone_number: str) -> Customer:\n    \"\"\"\n    Finds a customer by their primary contact or line phone number.\n\n    Args:\n        phone_number: The phone number to search for.\n\n    Returns:\n        Customer object if found, None otherwise.\n    \"\"\"\n    # Check primary contact number\n    for customer in self.db.customers:\n        if customer.phone_number == phone_number:\n            return customer\n\n        # Check lines\n        for line_id in customer.line_ids:\n            line = self._get_line_by_id(line_id)\n            if line and line.phone_number == phone_number:\n                return customer\n\n    raise ValueError(f\"Customer with phone number {phone_number} not found\")",
+  "telecom_get_customer_by_id": "def get_customer_by_id(self, customer_id: str) -> Customer:\n    \"\"\"\n    Retrieves a customer directly by their unique ID.\n\n    Args:\n        customer_id: The unique identifier of the customer.\n\n    Returns:\n        Customer object if found, None otherwise.\n    \"\"\"\n    for customer in self.db.customers:\n        if customer.customer_id == customer_id:\n            return customer\n\n    raise ValueError(f\"Customer with ID {customer_id} not found\")",
+  "telecom_get_customer_by_name": "def get_customer_by_name(self, full_name: str, dob: str) -> List[Customer]:\n    \"\"\"\n    Searches for customers by name and DOB. May return multiple matches if names are similar,\n    DOB helps disambiguate.\n\n    Args:\n        full_name: The full name of the customer.\n        dob: Date of birth for verification, in the format YYYY-MM-DD.\n\n    Returns:\n        List of matching Customer objects.\n    \"\"\"\n    matching_customers = []\n\n    for customer in self.db.customers:\n        if (\n            customer.full_name.lower() == full_name.lower()\n            and customer.date_of_birth == dob\n        ):\n            matching_customers.append(customer)\n\n    return matching_customers\n\n# Helper method to get a line by phone number",
+  "telecom_get_details_by_id": "def get_details_by_id(self, id: str) -> Dict[str, Any]:\n    \"\"\"\n    Retrieves the details for a given ID.\n    The ID must be a valid ID for a Customer, Line, Device, Bill, or Plan.\n\n    Args:\n        id: The ID of the object to retrieve.\n\n    Returns:\n        The object corresponding to the ID.\n\n    Raises:\n        ValueError: If the ID is not found or if the ID format is invalid.\n    \"\"\"\n    if id.startswith(\"L\"):\n        return self._get_line_by_id(id)\n    elif id.startswith(\"D\"):\n        return self._get_device_by_id(id)\n    elif id.startswith(\"B\"):\n        return self._get_bill_by_id(id)\n    elif id.startswith(\"C\"):\n        return self.get_customer_by_id(id)\n    elif id.startswith(\"P\"):\n        return self._get_plan_by_id(id)\n    else:\n        raise ValueError(f\"Unknown ID format or type: {id}\")",
+  "telecom_suspend_line": "def suspend_line(\n    self, customer_id: str, line_id: str, reason: str\n) -> Dict[str, Any]:\n    \"\"\"\n    Suspends a specific line (max 6 months).\n    Checks: Line status must be Active.\n    Logic: Sets line status to Suspended, records suspension_start_date.\n\n    Args:\n        customer_id: ID of the customer who owns the line.\n        line_id: ID of the line to suspend.\n        reason: Reason for suspension.\n\n    Returns:\n        Dictionary with success status, message, and updated line if applicable.\n\n    Raises:\n        ValueError: If customer or line not found, or if line is not active.\n    \"\"\"\n    target_line = self._get_target_line(customer_id, line_id)\n\n    if target_line.status != LineStatus.ACTIVE:\n        raise ValueError(\"Line must be active to suspend\")\n\n    target_line.status = LineStatus.SUSPENDED\n    target_line.suspension_start_date = get_today()\n\n    # Log reason\n    logger.info(f\"Line {line_id} suspended. Reason: {reason}\")\n\n    return {\n        \"message\": \"Line suspended successfully. $5/month holding fee will apply.\",\n        \"line\": target_line,\n    }",
+  "telecom_resume_line": "def resume_line(self, customer_id: str, line_id: str) -> Dict[str, Any]:\n    \"\"\"\n    Resumes a suspended line.\n    Checks: Line status must be Suspended or Pending Activation.\n    Logic: Sets line status to Active, clears suspension_start_date.\n\n    Args:\n        customer_id: ID of the customer who owns the line.\n        line_id: ID of the line to resume.\n\n    Returns:\n        Dictionary with success status, message, and updated line if applicable.\n\n    Raises:\n        ValueError: If customer or line not found, or if line is not suspended or pending activation.\n    \"\"\"\n    target_line = self._get_target_line(customer_id, line_id)\n\n    if target_line.status not in [\n        LineStatus.SUSPENDED,\n        LineStatus.PENDING_ACTIVATION,\n    ]:\n        raise ValueError(\"Line must be suspended to resume\")\n\n    target_line.status = LineStatus.ACTIVE\n    target_line.suspension_start_date = None\n\n    # Log action\n    logger.info(f\"Line {line_id} resumed\")\n\n    return {\n        \"message\": \"Line resumed successfully\",\n        \"line\": target_line,\n    }\n\n# Billing and Payments",
+  "telecom_get_bills_for_customer": "def get_bills_for_customer(self, customer_id: str, limit: int = 12) -> List[Bill]:\n    \"\"\"\n    Retrieves a list of the customer's bills, most recent first.\n\n    Args:\n        customer_id: ID of the customer.\n        limit: Maximum number of bills to return.\n\n    Returns:\n        List of Bill objects, ordered by issue date (newest first).\n\n    Raises:\n        ValueError: If the customer is not found.\n    \"\"\"\n    customer = self.get_customer_by_id(customer_id)\n    # customer object is guaranteed to be found here, or an error would have been raised.\n\n    bills = [self._get_bill_by_id(bill_id) for bill_id in customer.bill_ids]\n\n    # Sort bills by issue date descending\n    sorted_bills = sorted(bills, key=lambda bill: bill.issue_date, reverse=True)\n\n    # Apply limit\n    return sorted_bills[:limit]",
+  "telecom_send_payment_request": "def send_payment_request(self, customer_id: str, bill_id: str) -> str:\n    \"\"\"\n    Sends a payment request to the customer for a specific bill.\n    Checks:\n        - Customer exists\n        - Bill exists and belongs to the customer\n        - No other bills are already awaiting payment for this customer\n    Logic: Sets bill status to AWAITING_PAYMENT and notifies customer.\n    Warning: This method does not check if the bill is already PAID.\n    Always check the bill status before calling this method.\n\n    Args:\n        customer_id: ID of the customer who owns the bill.\n        bill_id: ID of the bill to send payment request for.\n\n    Returns:\n        Message indicating the payment request has been sent.\n\n    Raises:\n        ValueError: If customer not found, bill not found, or if another bill is already awaiting payment.\n    \"\"\"\n    customer = self.get_customer_by_id(customer_id)\n    if not customer:\n        raise ValueError(f\"Customer {customer_id} not found\")\n\n    bills = self._get_bills_awaiting_payment(customer)\n    if len(bills) != 0:\n        raise ValueError(\"A bill is already awaiting payment for this customer\")\n    if bill_id not in customer.bill_ids:\n        raise ValueError(f\"Bill {bill_id} not found for customer {customer_id}\")\n    bill = self._get_bill_by_id(bill_id)\n    bill.status = BillStatus.AWAITING_PAYMENT\n    return f\"Payment request sent to the customer for bill {bill.bill_id}\"",
+  "telecom_get_data_usage": "def get_data_usage(self, customer_id: str, line_id: str) -> Dict[str, Any]:\n    \"\"\"\n    Retrieves current billing cycle data usage for a line, including data\n    refueling amount, data limit, and cycle end date.\n\n    Args:\n        customer_id: ID of the customer who owns the line.\n        line_id: ID of the line to check usage for.\n\n    Returns:\n        Dictionary with usage information.\n\n    Raises:\n        ValueError: If customer, line, or plan not found.\n    \"\"\"\n    target_line = self._get_target_line(customer_id, line_id)\n    plan = self._get_plan_by_id(target_line.plan_id)\n\n    today = get_today()\n    cycle_end_date = date(\n        today.year, today.month + 1 if today.month < 12 else 1, 1\n    ) - timedelta(days=1)\n\n    return {\n        \"line_id\": line_id,\n        \"data_used_gb\": target_line.data_used_gb,\n        \"data_limit_gb\": plan.data_limit_gb,\n        \"data_refueling_gb\": target_line.data_refueling_gb,\n        \"cycle_end_date\": cycle_end_date,\n    }",
+  "telecom_enable_roaming": "def enable_roaming(self, customer_id: str, line_id: str) -> Dict[str, Any]:\n    \"\"\"\n    Enables international roaming on a line.\n\n    Args:\n        customer_id: ID of the customer who owns the line.\n        line_id: ID of the line to enable roaming for.\n\n    Returns:\n        Message indicating the roaming has been enabled.\n\n    Raises:\n        ValueError: If customer or line not found.\n    \"\"\"\n    target_line = self._get_target_line(customer_id, line_id)\n\n    if target_line.roaming_enabled:\n        return \"Roaming was already enabled\"\n\n    target_line.roaming_enabled = True\n\n    logger.info(f\"Roaming enabled for line {line_id}\")\n\n    return \"Roaming enabled successfully\"",
+  "telecom_disable_roaming": "def disable_roaming(self, customer_id: str, line_id: str) -> str:\n    \"\"\"\n    Disables international roaming on a line.\n\n    Args:\n        customer_id: ID of the customer who owns the line.\n        line_id: ID of the line to disable roaming for.\n\n    Returns:\n        Message indicating the roaming has been enabled.\n\n    Raises:\n        ValueError: If customer or line not found.\n    \"\"\"\n    target_line = self._get_target_line(customer_id, line_id)\n\n    if not target_line.roaming_enabled:\n        return \"Roaming was already disabled\"\n\n    target_line.roaming_enabled = False\n\n    logger.info(f\"Roaming disabled for line {line_id}\")\n\n    return \"Roaming disabled successfully\"",
+  "telecom_transfer_to_human_agents": "def transfer_to_human_agents(self, summary: str) -> str:\n    \"\"\"\n    Transfer the user to a human agent, with a summary of the user's issue.\n    Only transfer if\n     -  the user explicitly asks for a human agent\n     -  given the policy and the available tools, you cannot solve the user's issue.\n\n    Args:\n        summary: A summary of the user's issue.\n\n    Returns:\n        A message indicating the user has been transferred to a human agent.\n    \"\"\"\n    return \"Transfer successful\"",
+  "telecom_refuel_data": "def refuel_data(\n    self, customer_id: str, line_id: str, gb_amount: float\n) -> Dict[str, Any]:\n    \"\"\"\n    Refuels data for a specific line, adding to the customer's bill.\n    Checks: Line status must be Active, Customer owns the line.\n    Logic: Adds data to the line and charges customer based on the plan's refueling rate.\n\n    Args:\n        customer_id: ID of the customer who owns the line.\n        line_id: ID of the line to refuel data for.\n        gb_amount: Amount of data to add in gigabytes.\n\n    Returns:\n        Dictionary with success status, message, charge amount, and updated line if applicable.\n\n    Raises:\n        ValueError: If customer, line, or plan not found, or if checks fail.\n    \"\"\"\n    target_line = self._get_target_line(customer_id, line_id)\n\n    # if target_line.status != LineStatus.ACTIVE:\n    #     raise ValueError(\"Line must be active to refuel data\")\n\n    if gb_amount <= 0:\n        raise ValueError(\"Refuel amount must be positive\")\n\n    plan = self._get_plan_by_id(target_line.plan_id)\n    if not plan:\n        raise ValueError(\"Plan not found for this line\")\n\n    charge_amount = gb_amount * plan.data_refueling_price_per_gb\n\n    target_line.data_refueling_gb += gb_amount\n\n    self._apply_one_time_charge(\n        customer_id,\n        charge_amount,\n        f\"Data refueling: {gb_amount} GB at ${plan.data_refueling_price_per_gb}/GB\",\n    )\n\n    logger.info(\n        f\"Data refueled for line {line_id}: {gb_amount} GB added, charge: ${charge_amount:.2f}\"\n    )\n\n    return {\n        \"message\": f\"Successfully added {gb_amount} GB of data for line {line_id} for ${charge_amount:.2f}\",\n        \"new_data_refueling_gb\": target_line.data_refueling_gb,\n        \"charge\": charge_amount,\n    }\n\n### Break tools",
+  "telecom_user_check_status_bar": "def check_status_bar(self) -> str:\n    \"\"\"Shows what icons are currently visible in your phone's status bar (the area at the top of the screen). Displays network signal strength, mobile data status (enabled, disabled, data saver), Wi-Fi status, and battery level.\"\"\"\n    return f\"Status Bar: {self._check_status_bar()}\"",
+  "telecom_user_check_network_status": "def check_network_status(self) -> str:\n    \"\"\"Checks your phone's connection status to cellular networks and Wi-Fi. Shows airplane mode status, signal strength, network type, whether mobile data is enabled, and whether data roaming is enabled.\"\"\"\n    status = self._check_network_status()\n    lines = [\n        f\"Airplane Mode: {'ON' if status['airplane_mode'] else 'OFF'}\",\n        f\"SIM Card Status: {status['sim_status'].value}\",\n        f\"Cellular Connection: {status['connection_status'].value}\",\n        f\"Cellular Signal: {status['signal_strength'].value}\",\n        f\"Cellular Network Type: {status['network_technology'].value}\",\n        f\"Mobile Data Enabled: {'Yes' if status['mobile_data_enabled'] else 'No'}\",\n        f\"Data Roaming Enabled: {'Yes' if status['data_roaming_enabled'] else 'No'}\",\n        f\"Wi-Fi Radio: {'ON' if status['wifi_enabled'] else 'OFF'}\",\n        f\"Wi-Fi Connected: {'Yes' if status['wifi_connected'] else 'No'}\",\n    ]\n    if status[\"wifi_connected\"]:\n        lines.append(f\"Connected Wi-Fi Network: {status['wifi_ssid']}\")\n    return \"\\n\".join(lines)",
+  "telecom_user_check_network_mode_preference": "def check_network_mode_preference(self) -> str:\n    \"\"\"Shows the current network mode preference.\"\"\"\n    return f\"Network Mode Preference: {self._check_network_mode_preference().value}\"",
+  "telecom_user_set_network_mode_preference": "def set_network_mode_preference(\n    self, mode: Union[NetworkModePreference, str]\n) -> str:\n    \"\"\"Changes the type of cellular network your phone prefers to connect to (e.g., 5G, LTE/4G, 3G). Higher-speed networks (LTE/5G) provide faster data but may use more battery.\"\"\"\n    valid_mode = self._set_network_mode_preference(mode)\n    if valid_mode is None:\n        return f\"Failed to set network mode: '{mode}' is not a valid option. Please use one of: {', '.join([m.value for m in NetworkModePreference])}\\nStatus Bar: {self._check_status_bar()}\"\n    status_update = f\"Preferred Network Mode set to: {valid_mode.value}\"\n    return f\"{status_update}\\nStatus Bar: {self._check_status_bar()}\"",
+  "telecom_user_run_speed_test": "def run_speed_test(self) -> str:\n    \"\"\"Measures your current internet connection speed (download speed). Provides information about connection quality and what activities it can support.\"\"\"\n    speed_mbps, description = self._run_speed_test()\n\n    if speed_mbps is None:\n        return f\"Speed test failed: {description or 'Could not determine speed'}.\"\n\n    # Provide more context based on description\n    if description == \"Very Poor\":\n        advice = \"Connection is very slow. Basic web browsing might be difficult.\"\n    elif description == \"Poor\":\n        advice = (\n            \"Connection is slow. Web browsing may be sluggish, streaming difficult.\"\n        )\n    elif description == \"Fair\":\n        advice = \"Connection is okay for web browsing and some standard definition streaming.\"\n    elif description == \"Good\":\n        advice = \"Connection is good for most activities, including HD streaming.\"\n    elif description == \"Excellent\":\n        advice = \"Connection is very fast.\"\n    else:\n        advice = \"\"\n\n    return f\"Speed Test Result: {speed_mbps:.2f} Mbps ({description}). {advice}\"",
+  "telecom_user_toggle_airplane_mode": "def toggle_airplane_mode(self) -> str:\n    \"\"\"Toggles Airplane Mode ON or OFF. When ON, it disconnects all wireless communications including cellular, Wi-Fi, and Bluetooth.\n    Returns the new state of airplane_mode.\n    \"\"\"\n    new_state = self._toggle_airplane_mode()\n    status_update = f\"Airplane Mode is now {'ON' if new_state else 'OFF'}.\"\n    return f\"{status_update}\\nStatus Bar: {self._check_status_bar()}\"",
+  "telecom_user_check_sim_status": "def check_sim_status(self) -> str:\n    \"\"\"Checks if your SIM card is working correctly and displays its current status. Shows if the SIM is active, missing, or locked with a PIN or PUK code.\"\"\"\n    status = self._check_sim_status()\n    status_map = {\n        SimStatus.ACTIVE: \"Your SIM card is active and working.\",\n        SimStatus.MISSING: \"No SIM card detected in the phone.\",\n        SimStatus.LOCKED_PIN: \"The SIM card is locked with a PIN code.\",\n        SimStatus.LOCKED_PUK: \"The SIM card is locked with a PUK code.\",\n    }\n    return status_map.get(status, f\"Unknown SIM status: {status.value}\")",
+  "telecom_user_reseat_sim_card": "def reseat_sim_card(self) -> str:\n    \"\"\"Simulates removing and reinserting your SIM card. This can help resolve recognition issues.\"\"\"\n    status_update = self._reseat_sim_card()\n    return f\"{status_update}\\nStatus Bar: {self._check_status_bar()}\"",
+  "telecom_user_toggle_data": "def toggle_data(self) -> str:\n    \"\"\"Toggles your phone's mobile data connection ON or OFF. Controls whether your phone can use cellular data for internet access when Wi-Fi is unavailable.\n    Returns the new data connection status.\n    \"\"\"\n    new_state = self._toggle_data()\n    status_update = f\"Mobile Data is now {'ON' if new_state else 'OFF'}.\"\n    return f\"{status_update}\\nStatus Bar: {self._check_status_bar()}\"",
+  "telecom_user_toggle_roaming": "def toggle_roaming(self) -> str:\n    \"\"\"Toggles Data Roaming ON or OFF. When ON, your phone can use data networks in areas outside your carrier's coverage.\n    Returns the new data roaming status.\n    \"\"\"\n    new_state = self._toggle_roaming()\n    status_update = f\"Data Roaming is now {'ON' if new_state else 'OFF'}.\"\n    return f\"{status_update}\\nStatus Bar: {self._check_status_bar()}\"",
+  "telecom_user_check_data_restriction_status": "def check_data_restriction_status(self) -> str:\n    \"\"\"Checks if your phone has any data-limiting features active. Shows if Data Saver mode is on.\"\"\"\n    status = self._check_data_restriction_status()\n    lines = []\n    if status[\"data_saver_mode\"]:\n        lines.append(\"Data Saver mode is ON (limits data usage).\")\n    else:\n        lines.append(\"Data Saver mode is OFF.\")\n    return \"\\n\".join(lines)",
+  "telecom_user_toggle_data_saver_mode": "def toggle_data_saver_mode(self) -> str:\n    \"\"\"Toggles Data Saver mode ON or OFF. When ON, it reduces data usage, which may affect data speed.\n    Returns the new data saver mode status.\n    \"\"\"\n    new_state = self._toggle_data_saver_mode()\n    status_update = f\"Data Saver Mode is now {'ON' if new_state else 'OFF'}.\"\n    return f\"{status_update}\\nStatus Bar: {self._check_status_bar()}\"",
+  "telecom_user_check_apn_settings": "def check_apn_settings(self) -> str:\n    \"\"\"Checks the technical APN settings your phone uses to connect to your carrier's mobile data network. Shows current APN name and MMSC URL for picture messaging.\"\"\"\n    settings = self._check_apn_settings()\n    # Only show a few key, potentially relevant settings for a non-tech user\n    apn_name = settings.apn_name.value or \"Not Set\"\n    mmsc_url = settings.mmsc_url or \"Not Set\"\n    return f\"Current APN Name: {apn_name}\\nMMSC URL (for picture messages): {mmsc_url}\\n(These are technical settings, usually best left unchanged.)\"",
+  "telecom_user_set_apn_settings": "def set_apn_settings(self, apn_settings: Union[APNSettings, dict]) -> str:\n    \"\"\"Sets the APN settings for the phone.\"\"\"\n    if isinstance(apn_settings, dict):\n        apn_settings = APNSettings(**apn_settings)\n    status_update = self._set_apn_settings(apn_settings)\n    self.simulate_network_search()\n    return f\"{status_update}\\nStatus Bar: {self._check_status_bar()}\"",
+  "telecom_user_reset_apn_settings": "def reset_apn_settings(self) -> str:\n    \"\"\"Resets your APN settings to the default settings.\"\"\"\n    apn_status = self._reset_apn_settings()\n    self.simulate_network_search()\n    return f\"{apn_status}\\nStatus Bar: {self._check_status_bar()}\"",
+  "telecom_user_check_wifi_status": "def check_wifi_status(self) -> str:\n    \"\"\"Checks your Wi-Fi connection status. Shows if Wi-Fi is turned on, which network you're connected to (if any), and the signal strength.\"\"\"\n    status = self._check_wifi_status()\n    if not status[\"enabled\"]:\n        return \"Wi-Fi is turned OFF.\"\n    if status[\"connected\"]:\n        return f\"Wi-Fi is ON and connected to '{status['ssid']}'. Signal strength: {status['signal_strength'].value}.\"\n    else:\n        return \"Wi-Fi is ON but not connected to any network.\"",
+  "telecom_user_toggle_wifi": "def toggle_wifi(self) -> str:\n    \"\"\"Toggles your phone's Wi-Fi radio ON or OFF. Controls whether your phone can discover and connect to wireless networks for internet access.\n    Returns the new Wi-Fi status.\n    \"\"\"\n    new_state = self._toggle_wifi()\n    if new_state is None:\n        return f\"Cannot change Wi-Fi settings while Airplane Mode is ON.\\nStatus Bar: {self._check_status_bar()}\"\n    status_update = f\"Wi-Fi is now {'ON' if new_state else 'OFF'}.\"\n    return f\"{status_update}\\nStatus Bar: {self._check_status_bar()}\"",
+  "telecom_user_check_wifi_calling_status": "def check_wifi_calling_status(self) -> str:\n    \"\"\"Checks if Wi-Fi Calling is enabled on your device. This feature allows you to make and receive calls over a Wi-Fi network instead of using the cellular network.\"\"\"\n    status = self._check_wifi_calling_status()\n    enabled_str = \"ON\" if status[\"enabled\"] else \"OFF\"\n    # MMS preference might be too technical, keep it simple\n    return f\"Wi-Fi Calling is currently turned {enabled_str}.\"",
+  "telecom_user_toggle_wifi_calling": "def toggle_wifi_calling(self) -> str:\n    \"\"\"Toggles Wi-Fi Calling ON or OFF. This feature allows you to make and receive calls over Wi-Fi instead of the cellular network, which can help in areas with weak cellular signal.\n    Returns the new Wi-Fi Calling status.\n    \"\"\"\n    new_state = self._toggle_wifi_calling()\n    status_update = f\"Wi-Fi Calling is now {'ON' if new_state else 'OFF'}.\"\n    return f\"{status_update}\\nStatus Bar: {self._check_status_bar()}\"",
+  "telecom_user_check_vpn_status": "def check_vpn_status(self) -> str:\n    \"\"\"Checks if you're using a VPN (Virtual Private Network) connection. Shows if a VPN is active, connected, and displays any available connection details.\"\"\"\n    status = self._check_vpn_status()\n    if status[\"connected\"]:\n        details = status[\"details\"]\n        if details:\n            return f\"VPN is ON and connected. Details: {details}\"\n        else:\n            return \"VPN is ON and connected (no specific details available).\"\n    elif status[\"enabled_setting\"]:\n        return \"VPN is turned ON in settings, but currently not connected.\"\n    else:\n        return \"VPN is turned OFF.\"",
+  "telecom_user_connect_vpn": "def connect_vpn(self) -> str:\n    \"\"\"Connects to your VPN (Virtual Private Network).\"\"\"\n    connected = self._connect_vpn()\n    if connected is None:\n        return \"VPN already connected.\"\n    status_update = (\n        \"VPN connected successfully.\"\n        if connected\n        else \"No VPN connection to connect.\"\n    )\n    return f\"{status_update}\\nStatus Bar: {self._check_status_bar()}\"",
+  "telecom_user_disconnect_vpn": "def disconnect_vpn(self) -> str:\n    \"\"\"Disconnects any active VPN (Virtual Private Network) connection. Stops routing your internet traffic through a VPN server, which might affect connection speed or access to content.\"\"\"\n    disconnected = self._disconnect_vpn()\n    status_update = (\n        \"VPN disconnected successfully.\"\n        if disconnected\n        else \"No active VPN connection to disconnect.\"\n    )\n    return f\"{status_update}\\nStatus Bar: {self._check_status_bar()}\"",
+  "telecom_user_check_installed_apps": "def check_installed_apps(self) -> str:\n    \"\"\"Returns the name of all installed apps on the phone.\"\"\"\n    app_names = \", \".join(self._check_installed_apps())\n    return f\"The following apps are installed on the phone: {app_names}\"",
+  "telecom_user_check_app_status": "def check_app_status(self, app_name: str) -> str:\n    \"\"\"Checks detailed information about a specific app. Shows its permissions and background data usage settings.\"\"\"\n    app_status = self._check_app_status(app_name)\n    if app_status is None:\n        return f\"App '{app_name}' not found on this phone.\"\n\n    lines = [f\"Status for App: {app_name}\"]\n\n    # Permissions Summary (using the logic from get_app_permissions)\n    allowed_perms = [\n        name.replace(\"_\", \" \").lower()  # change from capitalize to lowercase\n        for name, allowed in app_status.permissions.model_dump().items()\n        if allowed\n    ]\n    if not allowed_perms:\n        lines.append(\" - Permissions: None granted.\")\n    else:\n        lines.append(\" - Permissions Granted:\")\n        for perm in allowed_perms:\n            lines.append(f\"   - {perm}\")\n\n    return \"\\n\".join(lines)",
+  "telecom_user_check_app_permissions": "def check_app_permissions(self, app_name: str) -> str:\n    \"\"\"Checks what permissions a specific app currently has. Shows if the app has access to features like storage, camera, location, etc.\"\"\"\n    permissions = self._check_app_permissions(app_name)\n    if permissions is None:\n        # Check if app exists at all\n        return f\"App '{app_name}' not found on this phone.\"\n    allowed_perms = [\n        name.replace(\"_\", \" \").lower()  # change from capitalize to lowercase\n        for name, allowed in permissions.model_dump().items()\n        if allowed\n    ]\n\n    if not allowed_perms:\n        return f\"App '{app_name}' currently has no permissions granted.\"\n    else:\n        return f\"App '{app_name}' has permission for: {', '.join(allowed_perms)}.\"",
+  "telecom_user_grant_app_permission": "def grant_app_permission(self, app_name: str, permission: str) -> str:\n    \"\"\"Gives a specific permission to an app (like access to storage, camera, or location). Required for some app functions to work properly.\n\n    Args:\n        app_name: The name of the app to grant the permission to.\n        permission: The permission to grant, should be lowercase.\n    \"\"\"\n    success, message = self._grant_app_permission(app_name, permission)\n    result = \"Success. \" if success else \"Error. \"\n    return f\"{result}{message}\\nStatus Bar: {self._check_status_bar()}\"",
+  "telecom_user_can_send_mms": "def can_send_mms(self) -> str:\n    \"\"\"Checks if the default messaging app can send MMS messages.\"\"\"\n    result = self._can_send_mms()\n    if result:\n        return \"Your messaging app can send MMS messages.\"\n    else:\n        return \"Your messaging app cannot send MMS messages.\"",
+  "telecom_user_reboot_device": "def reboot_device(self) -> str:\n    \"\"\"Restarts your phone completely. This can help resolve many temporary software glitches by refreshing all running services and connections.\"\"\"\n    status_update = self._reboot_device()\n    return f\"{status_update}\\nStatus Bar: {self._check_status_bar()}\"",
+  "telecom_user_check_payment_request": "def check_payment_request(self) -> str:\n    \"\"\"\n    Checks if the agent has sent you a payment request.\n    \"\"\"\n    payment_request = self._check_payment_request()\n    if payment_request is None:\n        return \"No payment request has been made.\"\n    return f\"You have a payment request for bill {payment_request.bill_id} of {payment_request.amount_due} USD.\"",
+  "telecom_user_make_payment": "def make_payment(self) -> str:\n    \"\"\"\n    Makes a payment for the bill that the agent has sent you.\n    \"\"\"\n    msg = self._make_payment()\n    if msg is None:\n        return \"You do not have a payment request.\"\n    return msg"
+};
+
 const TAU2_EXAMPLES = {
   "airline_book_reservation": {
-    "user_id": "sara_doe_496",
-    "origin": "SFO",
-    "destination": "JFK",
-    "flight_type": "round_trip",
-    "cabin": "business",
+    "user_id": "raj_sanchez_7340",
+    "origin": "ORD",
+    "destination": "BOS",
+    "flight_type": "one_way",
+    "cabin": "economy",
     "flights": [
       {
-        "flight_number": "HAT001",
-        "date": "2024-05-01"
+        "flight_number": "HAT050",
+        "date": "2024-05-17"
       }
     ],
     "passengers": [
       {
-        "first_name": "John",
-        "last_name": "Doe",
-        "dob": "1990-01-01"
+        "first_name": "Raj",
+        "last_name": "Sanchez",
+        "dob": "1965-09-13"
       }
     ],
     "payment_methods": [
       {
-        "payment_id": "<payment_id>",
-        "amount": 1
+        "payment_id": "credit_card_7891819",
+        "amount": 130
       }
     ],
-    "total_baggages": 1,
-    "nonfree_baggages": 1,
-    "insurance": "yes"
+    "total_baggages": 0,
+    "nonfree_baggages": 0,
+    "insurance": "no"
   },
   "airline_calculate": {
-    "expression": "2 + 2"
+    "expression": "166 + 162 + 102"
   },
   "airline_cancel_reservation": {
-    "reservation_id": "ZFA04Y"
+    "reservation_id": "Q69X3R"
   },
   "airline_get_reservation_details": {
-    "reservation_id": "8JX2WO"
+    "reservation_id": "Q69X3R"
   },
   "airline_get_user_details": {
-    "user_id": "sara_doe_496"
+    "user_id": "raj_sanchez_7340"
   },
   "airline_list_all_airports": {},
   "airline_search_direct_flight": {
-    "origin": "JFK",
-    "destination": "LAX",
-    "date": "2024-01-01"
+    "origin": "ORD",
+    "destination": "BOS",
+    "date": "2024-05-17"
   },
   "airline_search_onestop_flight": {
-    "origin": "JFK",
-    "destination": "LAX",
-    "date": "2024-05-01"
+    "origin": "PHL",
+    "destination": "LGA",
+    "date": "2024-05-20"
   },
   "airline_send_certificate": {
-    "user_id": "sara_doe_496",
-    "amount": 1
+    "user_id": "raj_sanchez_7340",
+    "amount": 50
   },
   "airline_transfer_to_human": {
-    "summary": "Customer needs assistance with their account."
+    "summary": "Customer needs help with reservation Q69X3R."
   },
   "airline_update_baggages": {
-    "reservation_id": "ZFA04Y",
+    "reservation_id": "Q69X3R",
     "total_baggages": 1,
     "nonfree_baggages": 1,
-    "payment_id": "credit_card_7815826"
+    "payment_id": "credit_card_7891819"
   },
   "airline_update_flights": {
-    "reservation_id": "ZFA04Y",
-    "cabin": "business",
+    "reservation_id": "MZDDS4",
+    "cabin": "economy",
     "flights": [
       {
-        "flight_number": "HAT001",
-        "date": "2024-05-01"
+        "flight_number": "HAT050",
+        "date": "2024-05-17"
       }
     ],
-    "payment_id": "credit_card_7815826"
+    "payment_id": "credit_card_7891819"
   },
   "airline_update_passengers": {
-    "reservation_id": "ZFA04Y",
+    "reservation_id": "Q69X3R",
     "passengers": [
       {
-        "first_name": "John",
-        "last_name": "Doe",
-        "dob": "1990-01-01"
+        "first_name": "Raj",
+        "last_name": "Sanchez",
+        "dob": "1965-09-13"
       }
     ]
   },
   "airline_get_flight_status": {
-    "flight_number": "HAT001",
-    "date": "2024-05-01"
+    "flight_number": "HAT243",
+    "date": "2024-05-20"
   },
   "retail_calculate": {
     "expression": "2 + 2"
   },
   "retail_cancel_pending_order": {
-    "order_id": "#W0000000",
+    "order_id": "#W4566809",
     "reason": "no longer needed"
   },
   "retail_exchange_delivered_order": {
-    "order_id": "#W0000000",
+    "order_id": "#W7736708",
     "item_ids": [
-      "1008292230"
+      "3104857380"
     ],
     "new_item_ids": [
-      "1008292230"
+      "3374679624"
     ],
-    "payment_method_id": "gift_card_0000000"
+    "payment_method_id": "credit_card_3362387"
   },
   "retail_find_user_by_name_zip": {
-    "first_name": "John",
-    "last_name": "Doe",
-    "zip": "12345"
+    "first_name": "Raj",
+    "last_name": "Sanchez",
+    "zip": "92147"
   },
   "retail_find_user_by_email": {
-    "email": "something@example.com"
+    "email": "raj.sanchez2046@example.com"
   },
   "retail_get_order_details": {
-    "order_id": "#W0000000"
+    "order_id": "#W4566809"
   },
   "retail_get_product_details": {
-    "product_id": "6086499569"
+    "product_id": "2985987096"
   },
   "retail_get_item_details": {
-    "item_id": "6086499569"
+    "item_id": "1569829406"
   },
   "retail_get_user_details": {
-    "user_id": "sara_doe_496"
+    "user_id": "raj_sanchez_2970"
   },
   "retail_list_all_product_types": {},
   "retail_modify_order_address": {
-    "order_id": "#W0000000",
-    "address1": "123 Main St",
-    "address2": "Apt 1",
-    "city": "San Francisco",
+    "order_id": "#W4566809",
+    "address1": "100 New Street",
+    "address2": "Apt 5",
+    "city": "Los Angeles",
     "state": "CA",
     "country": "USA",
-    "zip": "12345"
+    "zip": "90001"
   },
   "retail_modify_order_items": {
-    "order_id": "#W0000000",
+    "order_id": "#W4566809",
     "item_ids": [
-      "1008292230"
+      "1569829406"
     ],
     "new_item_ids": [
-      "1008292230"
+      "8470360507"
     ],
-    "payment_method_id": "gift_card_0000000"
+    "payment_method_id": "credit_card_3362387"
   },
   "retail_modify_order_payment": {
-    "order_id": "#W0000000",
-    "payment_method_id": "gift_card_0000000"
+    "order_id": "#W4566809",
+    "payment_method_id": "gift_card_2259499"
   },
   "retail_modify_user_address": {
-    "user_id": "sara_doe_496",
-    "address1": "123 Main St",
-    "address2": "Apt 1",
-    "city": "San Francisco",
+    "user_id": "raj_sanchez_2970",
+    "address1": "200 Ocean Ave",
+    "address2": "Unit 1",
+    "city": "Santa Monica",
     "state": "CA",
     "country": "USA",
-    "zip": "12345"
+    "zip": "90401"
   },
   "retail_return_delivered_order": {
-    "order_id": "#W0000000",
+    "order_id": "#W7736708",
     "item_ids": [
-      "1008292230"
+      "3104857380"
     ],
-    "payment_method_id": "gift_card_0000000"
+    "payment_method_id": "credit_card_3362387"
   },
   "retail_transfer_to_human": {
-    "summary": "Customer needs assistance with their account."
+    "summary": "Customer raj_sanchez_2970 needs help with order #W4566809."
   },
   "telecom_get_customer_by_phone": {
-    "phone_number": "555-123-4567"
+    "phone_number": "555-123-2002"
   },
   "telecom_get_customer_by_id": {
-    "customer_id": "CUST_001"
+    "customer_id": "C1001"
   },
   "telecom_get_customer_by_name": {
-    "full_name": "John Doe",
-    "dob": "1990-01-01"
+    "full_name": "John Smith",
+    "dob": "1985-06-15"
   },
   "telecom_get_details_by_id": {
-    "id": "<id>"
+    "id": "L1002"
   },
   "telecom_suspend_line": {
-    "customer_id": "CUST_001",
-    "line_id": "LINE_001",
-    "reason": "no longer needed"
+    "customer_id": "C1001",
+    "line_id": "L1001",
+    "reason": "lost phone"
   },
   "telecom_resume_line": {
-    "customer_id": "CUST_001",
-    "line_id": "LINE_001"
+    "customer_id": "C1001",
+    "line_id": "L1001"
   },
   "telecom_get_bills": {
-    "customer_id": "CUST_001",
-    "limit": 1
+    "customer_id": "C1001",
+    "limit": 3
   },
   "telecom_send_payment_request": {
-    "customer_id": "CUST_001",
-    "bill_id": "BILL_001"
+    "customer_id": "C1002",
+    "bill_id": "B1005"
   },
   "telecom_get_data_usage": {
-    "customer_id": "CUST_001",
-    "line_id": "LINE_001"
+    "customer_id": "C1001",
+    "line_id": "L1002"
   },
   "telecom_enable_roaming": {
-    "customer_id": "CUST_001",
-    "line_id": "LINE_001"
+    "customer_id": "C1001",
+    "line_id": "L1001"
   },
   "telecom_disable_roaming": {
-    "customer_id": "CUST_001",
-    "line_id": "LINE_001"
+    "customer_id": "C1001",
+    "line_id": "L1002"
   },
   "telecom_transfer_to_human": {
-    "summary": "Customer needs assistance with their account."
+    "summary": "Customer C1001 has a billing dispute."
   },
   "telecom_refuel_data": {
-    "customer_id": "CUST_001",
-    "line_id": "LINE_001",
-    "gb_amount": 5
+    "customer_id": "C1001",
+    "line_id": "L1002",
+    "gb_amount": 1
   },
   "telecom_user_check_status_bar": {},
   "telecom_user_check_network_status": {},
   "telecom_user_check_network_mode": {},
   "telecom_user_set_network_mode": {
-    "mode": "<mode>"
+    "mode": "4g_5g_preferred"
   },
   "telecom_user_run_speed_test": {},
   "telecom_user_toggle_airplane": {},
@@ -20965,19 +21074,102 @@ const TAU2_EXAMPLES = {
   "telecom_user_disconnect_vpn": {},
   "telecom_user_check_installed_apps": {},
   "telecom_user_check_app_status": {
-    "app_name": "Messages"
+    "app_name": "messaging"
   },
   "telecom_user_check_app_permissions": {
-    "app_name": "Messages"
+    "app_name": "messaging"
   },
   "telecom_user_grant_permission": {
-    "app_name": "Messages",
-    "permission": "storage"
+    "app_name": "messaging",
+    "permission": "sms"
   },
   "telecom_user_can_send_mms": {},
   "telecom_user_reboot_device": {},
   "telecom_user_check_payment_request": {},
-  "telecom_user_make_payment": {}
+  "telecom_user_make_payment": {},
+  "retail_find_user_id_by_email": {
+    "email": "raj.sanchez2046@example.com"
+  },
+  "retail_find_user_id_by_name_zip": {
+    "first_name": "Raj",
+    "last_name": "Sanchez",
+    "zip": "92147"
+  },
+  "retail_transfer_to_human_agents": {
+    "summary": "Customer needs help with billing dispute"
+  },
+  "retail_modify_pending_order_address": {
+    "order_id": "#W4566809",
+    "address1": "100 New Street",
+    "address2": "Apt 1",
+    "city": "Los Angeles",
+    "state": "CA",
+    "country": "USA",
+    "zip": "90001"
+  },
+  "retail_modify_pending_order_payment": {
+    "order_id": "#W4566809",
+    "payment_method_id": "credit_card_3362387"
+  },
+  "retail_modify_pending_order_items": {
+    "order_id": "#W4566809",
+    "item_ids": [
+      "1569829406"
+    ],
+    "new_item_ids": [
+      "8470360507"
+    ],
+    "payment_method_id": "credit_card_3362387"
+  },
+  "retail_return_delivered_order_items": {
+    "order_id": "#W7736708",
+    "item_ids": [
+      "3104857380"
+    ],
+    "payment_method_id": "credit_card_3362387"
+  },
+  "retail_exchange_delivered_order_items": {
+    "order_id": "#W7736708",
+    "item_ids": [
+      "3104857380"
+    ],
+    "new_item_ids": [
+      "8470360507"
+    ],
+    "payment_method_id": "credit_card_3362387"
+  },
+  "telecom_get_bills_for_customer": {
+    "customer_id": "C1001",
+    "limit": 5
+  },
+  "telecom_transfer_to_human_agents": {
+    "summary": "Customer has billing dispute"
+  },
+  "telecom_user_check_network_mode_preference": {},
+  "telecom_user_check_sim_status": {},
+  "telecom_user_check_data_restriction_status": {},
+  "telecom_user_check_apn_settings": {},
+  "telecom_user_check_wifi_status": {},
+  "telecom_user_check_wifi_calling_status": {},
+  "telecom_user_check_vpn_status": {},
+  "telecom_user_set_network_mode_preference": {
+    "mode": "4g_5g_preferred"
+  },
+  "telecom_user_toggle_airplane_mode": {},
+  "telecom_user_toggle_data_saver_mode": {},
+  "telecom_user_reset_apn_settings": {},
+  "telecom_user_set_apn_settings": {
+    "apn_settings": {
+      "apn_name": "internet",
+      "mmsc_url": "http://mms.carrier.com/mms/wapenc",
+      "reset_at_reboot": false
+    }
+  },
+  "telecom_user_grant_app_permission": {
+    "app_name": "messaging",
+    "permission": "sms"
+  },
+  "telecom_user_reseat_sim_card": {}
 };
 
 // ── Schema generators ──────────────────────────────────────
@@ -21137,6 +21329,8 @@ function openModal(id) {
   refreshSchemaCode();
   refreshParams();
   refreshExample();
+  showFunctionTab();
+  showTryItTab();
   if (hasEndpoint) refreshEndpoint();
 
   document.getElementById('overlay').classList.add('open');
@@ -21163,6 +21357,160 @@ function switchFormat(fmt, btn) {
   btn.classList.add('active');
   refreshSchemaCode();
 }
+
+// ── Function tab ──────────────────────────────────────────────────
+
+function showFunctionTab() {
+  const btn = document.getElementById("functionTabBtn");
+  const el  = document.getElementById("functionCode");
+  if (!activeTool || activeTool.source !== "tau2") {
+    btn.style.display = "none";
+    return;
+  }
+  btn.style.display = "";
+  const src = TAU2_FUNCTIONS[activeTool.id] || "";
+  if (src) {
+    el.innerHTML = highlight(src);
+    el._raw = src;
+  } else {
+    el.textContent = "# Source not available";
+    el._raw = "# Source not available";
+  }
+}
+
+function copyFunction() {
+  const el = document.getElementById("functionCode");
+  const text = el._raw || el.innerText || el.textContent;
+  const btn = el.parentElement.querySelector(".copy-btn");
+  const doCopy = () => {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    if (btn) { btn.textContent = "copied!"; setTimeout(() => btn.textContent = "copy", 1500); }
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => {
+      if (btn) { btn.textContent = "copied!"; setTimeout(() => btn.textContent = "copy", 1500); }
+    }).catch(doCopy);
+  } else {
+    doCopy();
+  }
+}
+
+
+// ── Try It execution ──────────────────────────────────────────────
+
+// Map TAU2 tool domain prefix → server route
+const TOOL_DOMAIN_MAP = {
+  "airline_":      "airline",
+  "retail_":       "retail",
+  "telecom_user_": "telecom_user",
+  "telecom_":      "telecom",
+};
+
+const TAU2_SERVER = "http://127.0.0.1:8000";
+
+function getTryItRoute(toolId) {
+  for (const [prefix, domain] of Object.entries(TOOL_DOMAIN_MAP)) {
+    if (toolId.startsWith(prefix)) {
+      // strip prefix to get actual tool_name
+      const toolName = activeTool.name;
+      return `${TAU2_SERVER}/tools/${domain}/${toolName}`;
+    }
+  }
+  return null;
+}
+
+function showTryItTab() {
+  const tryitBtn = document.getElementById("tryitTabBtn");
+  if (!activeTool || activeTool.source !== "tau2") {
+    tryitBtn.style.display = "none";
+    return;
+  }
+  tryitBtn.style.display = "";
+  // Pre-fill with Example Call args
+  const args = TAU2_EXAMPLES[activeTool.id] || {};
+  document.getElementById("tryitInput").value = JSON.stringify(args, null, 2);
+  document.getElementById("tryitResultSection").style.display = "none";
+  document.getElementById("tryitStatus").textContent = "";
+}
+
+async function executeTool() {
+  const route = getTryItRoute(activeTool.id);
+  if (!route) {
+    document.getElementById("tryitStatus").textContent = "⚠️ Unknown domain";
+    return;
+  }
+
+  let args;
+  try {
+    args = JSON.parse(document.getElementById("tryitInput").value || "{}");
+  } catch(e) {
+    document.getElementById("tryitStatus").textContent = "⚠️ Invalid JSON: " + e.message;
+    return;
+  }
+
+  const btn = document.getElementById("tryitBtn");
+  const status = document.getElementById("tryitStatus");
+  btn.disabled = true;
+  btn.textContent = "⏳ Running...";
+  status.textContent = "";
+
+  try {
+    const resp = await fetch(route, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({arguments: args}),
+    });
+    const data = await resp.json();
+    const resultSection = document.getElementById("tryitResultSection");
+    const resultEl = document.getElementById("tryitResult");
+    resultSection.style.display = "";
+    if (resp.ok && data.ok) {
+      status.textContent = "✅ Success";
+      resultEl.innerHTML = highlight(JSON.stringify(data.result, null, 2));
+      resultEl._raw = JSON.stringify(data.result, null, 2);
+    } else {
+      status.textContent = "❌ Error";
+      const errMsg = data.detail || JSON.stringify(data);
+      resultEl.innerHTML = highlight(JSON.stringify({error: errMsg}, null, 2));
+      resultEl._raw = JSON.stringify({error: errMsg}, null, 2);
+    }
+  } catch(e) {
+    status.textContent = "❌ Cannot reach server";
+    const resultSection = document.getElementById("tryitResultSection");
+    resultSection.style.display = "";
+    const msg = `Server not running. Start it with:
+  python tau2_server.py
+
+Error: ${e.message}`;
+    document.getElementById("tryitResult").textContent = msg;
+    document.getElementById("tryitResult")._raw = msg;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "▶ Execute";
+  }
+}
+
+function copyTryitResult() {
+  const el = document.getElementById("tryitResult");
+  const text = el._raw || el.textContent;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text);
+  } else {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand("copy");
+    document.body.removeChild(ta);
+  }
+}
+
 
 function refreshSchemaCode() {
   if (!activeTool) return;
